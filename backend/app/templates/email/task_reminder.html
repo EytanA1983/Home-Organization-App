@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תזכורת משימות</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .header h1 {
+            color: #8B4513;
+            margin: 0;
+            font-size: 24px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #555;
+        }
+        .tasks-section {
+            margin-top: 30px;
+        }
+        .task-item {
+            background-color: #fafafa;
+            border-right: 4px solid #8B4513;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        .task-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .task-details {
+            color: #666;
+            font-size: 14px;
+        }
+        .task-due {
+            color: #d32f2f;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #8B4513;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 {{ app_name }}</h1>
+        </div>
+        
+        <div class="greeting">
+            שלום {{ user_name }},
+        </div>
+        
+        <p>
+            יש לך <strong>{{ tasks_count }}</strong> משימות שלא הושלמו:
+        </p>
+        
+        <div class="tasks-section">
+            {% for task in tasks %}
+            <div class="task-item">
+                <div class="task-title">{{ task.title }}</div>
+                {% if task.description %}
+                <div class="task-details">{{ task.description }}</div>
+                {% endif %}
+                {% if task.due_date %}
+                <div class="task-due">📅 מועד: {{ task.due_date }}</div>
+                {% endif %}
+                {% if task.room_name %}
+                <div class="task-details">🏠 חדר: {{ task.room_name }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="#" class="button">פתח את האפליקציה</a>
+        </div>
+        
+        <div class="footer">
+            <p>תזכורת זו נשלחה אוטומטית מהמערכת</p>
+            <p>אם אינך מעוניין לקבל תזכורות, ניתן לבטל בהגדרות</p>
+        </div>
+    </div>
+</body>
+</html>

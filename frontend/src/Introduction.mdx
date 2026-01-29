@@ -1,0 +1,103 @@
+import { Meta } from '@storybook/blocks';
+
+<Meta title="Introduction" />
+
+# 🏡 אלי מאור - סידור וארגון הבית
+
+ברוכים הבאים ל-Storybook של אפליקציית **אלי מאור** - מערכת לניהול משימות וארגון הבית.
+
+## 📦 קומפוננטות
+
+### Core Components
+- **RoomCard** - כרטיס חדר עם פס התקדמות
+- **NavBar** - סרגל ניווט ראשי
+- **ThemeToggle** - החלפת ערכת נושא
+- **TodoItem** - תת-משימה
+- **LoadingSpinner** - אנימציית טעינה
+
+### Pages
+- **Settings** - עמוד הגדרות
+- **LoginPage** - עמוד התחברות
+- **HomePage** - עמוד הבית
+
+## 🎨 עקרונות עיצוב
+
+### צבעים
+- **Cream** `#FAF3E0` - רקע ראשי
+- **Sky** `#AEDFF7` - צבע מבטא ראשי
+- **Mint** `#B4E7B5` - הצלחה / הושלם
+- **Blush** `#F7C6C6` - שגיאה / התראה
+- **Earth** `#D4A574` - צבע משני
+
+### טיפוגרפיה
+- **Rubik** - פונט ראשי
+- **Assistant** - פונט משני
+- **Heebo** - פונט חלופי
+
+### RTL Support
+האפליקציה תומכת בעברית (RTL) מלא:
+- כיוון טקסט מימין לשמאל
+- אייקונים מותאמים
+- תמיכה ב-i18n
+
+## 🔧 כלים
+
+### Addons בשימוש
+- **a11y** - בדיקות נגישות
+- **viewport** - תצוגה רספונסיבית
+- **interactions** - בדיקות אינטראקציה
+- **controls** - שליטה בפרופס
+
+### Viewport Presets
+| Name | Size |
+|------|------|
+| Mobile | 375x667 |
+| Tablet | 768x1024 |
+| Desktop | 1280x800 |
+| Desktop Large | 1920x1080 |
+| 4K | 2560x1440 |
+
+## 🧪 בדיקות
+
+### Visual Regression
+ניתן להריץ בדיקות visual regression עם:
+
+```bash
+npm run test-storybook
+```
+
+### Accessibility
+כל קומפוננטה נבדקת אוטומטית לנגישות WCAG.
+
+## 📚 מבנה הקוד
+
+```
+frontend/
+├── .storybook/          # Storybook configuration
+│   ├── main.ts         # Main config
+│   └── preview.tsx     # Decorators & globals
+├── src/
+│   ├── components/     # UI Components
+│   │   ├── RoomCard.tsx
+│   │   ├── RoomCard.stories.tsx
+│   │   └── ...
+│   └── pages/          # Page Components
+└── public/             # Static assets
+```
+
+## 🚀 התחלה מהירה
+
+```bash
+# Run Storybook
+npm run storybook
+
+# Build static Storybook
+npm run build-storybook
+
+# Run interaction tests
+npm run test-storybook
+```
+
+---
+
+**תיעוד מלא:** [GitHub Repository](https://github.com/your-repo)

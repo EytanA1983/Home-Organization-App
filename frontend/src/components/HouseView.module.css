@@ -1,0 +1,151 @@
+/**
+ * HouseView CSS Module
+ * 
+ * Custom styles for interactive SVG house view:
+ * - Room hover effects
+ * - Transition animations
+ * - Selection states
+ */
+
+/* ==================== Container ==================== */
+.container {
+  @apply flex justify-center p-4;
+}
+
+.svgWrapper {
+  @apply border rounded-md bg-cream relative;
+  width: 400px;
+  height: 400px;
+  overflow: hidden;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* ==================== Room Interactivity ==================== */
+/* These styles are applied via JS to SVG elements */
+.roomHoverable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.roomHoverable:hover {
+  filter: brightness(1.05);
+  transform-origin: center;
+}
+
+/* ==================== Room Selection Pulse ==================== */
+.roomSelected {
+  animation: roomPulse 0.5s ease-out;
+}
+
+@keyframes roomPulse {
+  0% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.2) drop-shadow(0 0 8px rgba(174, 223, 247, 0.5));
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+/* ==================== Loading State ==================== */
+.loading {
+  @apply flex items-center justify-center h-full text-gray-500;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==================== SVG Room Labels ==================== */
+.roomLabel {
+  pointer-events: none;
+  font-family: 'Rubik', 'Assistant', sans-serif;
+  font-weight: bold;
+  fill: #333;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* ==================== Room Color Overlays ==================== */
+.roomOverlay {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+.svgWrapper:hover .roomOverlay {
+  opacity: 0.1;
+}
+
+/* ==================== Tooltip ==================== */
+.tooltip {
+  @apply absolute bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.2s ease;
+  z-index: 50;
+  white-space: nowrap;
+}
+
+.tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1f2937;
+}
+
+/* ==================== Room Status Indicators ==================== */
+.statusIndicator {
+  @apply absolute w-3 h-3 rounded-full;
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+.statusIndicator.complete {
+  @apply bg-emerald-500;
+}
+
+.statusIndicator.inProgress {
+  @apply bg-amber-500;
+}
+
+.statusIndicator.empty {
+  @apply bg-gray-400;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* ==================== Fallback SVG Styles ==================== */
+.fallbackSvg rect[data-room-id] {
+  transition: all 0.2s ease;
+}
+
+.fallbackSvg rect[data-room-id]:hover {
+  filter: brightness(1.1);
+  stroke-width: 3;
+}

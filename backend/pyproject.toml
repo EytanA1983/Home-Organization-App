@@ -1,0 +1,384 @@
+[tool.poetry]
+name = "eli-maor"
+version = "0.1.0"
+description = "Home organization app – backend (FastAPI)"
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.23"}
+alembic = "^1.13.0"
+psycopg2-binary = "^2.9.9"          # PostgreSQL driver (dev)
+pydantic = "^2.5.2"
+pydantic-settings = "^2.1.0"
+python-dotenv = "^1.0.0"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}  # JWT
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+fastapi-users = {extras = ["sqlalchemy", "oauth"], version = "^12.1.2"}
+python-multipart = "^0.0.7"
+email-validator = ">=1.1.0,<2.1"
+redis = "^5.0.1"
+fastapi-cache2 = {extras = ["redis"], version = "^0.2.1"}
+hiredis = "^2.2.3"
+slowapi = "^0.1.9"  # Rate limiting for FastAPI (Flask-Limiter port)
+celery = {extras = ["redis"], version = "^5.3.6"}
+flower = "^2.0.1"
+google-auth = "^2.27.0"
+google-auth-oauthlib = "^1.2.0"
+google-api-python-client = "^2.115.0"
+google-auth-httplib2 = "^0.1.1"
+pywebpush = "^1.14.0"
+firebase-admin = "^6.3.0"
+cryptography = "^41.0.7"
+aiosmtplib = "^2.0.2"               # אם רוצים לשלוח אימיילים
+python-dateutil = "^2.9.0.post0"     # recurrence (RRULE)
+httpx-oauth = "^0.15.0"
+asyncpg = "^0.29.0"
+aiosqlite = "^0.19.0"
+loguru = "^0.7.2"  # Advanced logging with rotation, JSON, ELK/Loki support
+sqlalchemy-utils = "^0.41.1"  # Utilities for SQLAlchemy (optional, using custom audit trail)
+prometheus-fastapi-instrumentator = "^7.0.0"  # Prometheus metrics for FastAPI
+strawberry-graphql = {extras = ["fastapi"], version = "^0.220.0"}  # GraphQL API
+fastapi-mail = "^1.4.1"  # Email sending with FastAPI
+jinja2 = "^3.1.3"  # Email templates
+openai = "^1.12.0"  # OpenAI API for AI suggestions
+tiktoken = "^0.8.0"  # Token counting for OpenAI (needs pre-built wheel)
+# OpenTelemetry - Distributed Tracing
+opentelemetry-api = "^1.22.0"
+opentelemetry-sdk = "^1.22.0"
+opentelemetry-instrumentation-fastapi = "^0.43b0"
+opentelemetry-instrumentation-sqlalchemy = "^0.43b0"
+opentelemetry-instrumentation-redis = "^0.43b0"
+opentelemetry-instrumentation-httpx = "^0.43b0"
+opentelemetry-instrumentation-celery = "^0.43b0"
+opentelemetry-instrumentation-logging = "^0.43b0"
+opentelemetry-exporter-otlp = "^1.22.0"
+opentelemetry-exporter-jaeger = "^1.21.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.5"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+httpx = "^0.27.0"
+# Logging integrations
+watchtower = "^3.0.1"  # AWS CloudWatch logs
+python-json-logger = "^2.0.7"  # JSON logging for ELK
+# Secrets management (optional)
+hvac = "^2.1.0"  # HashiCorp Vault client
+boto3 = "^1.34.0"  # AWS SDK (for Secrets Manager)
+# Linting and formatting
+ruff = "^0.3.0"  # Fast Python linter and formatter (replaces flake8, isort, black)
+black = "^24.2.0"
+isort = "^5.13.2"
+mypy = "^1.8.0"
+flake8 = "^7.0.0"
+bandit = "^1.7.7"  # Security vulnerability scanner
+safety = "^3.0.1"  # Dependency vulnerability scanner
+ipython = "^8.18.1"
+ipdb = "^0.13.13"
+pre-commit = "^3.6.0"
+types-requests = "^2.31.0.10"
+types-python-dateutil = "^2.8.19.14"
+
+[tool.poetry.scripts]
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+migrate = "alembic upgrade head"
+makemigrations = "alembic revision --autogenerate -m"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = ["*/migrations/*", "*/alembic/*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+ignore_missing_imports = true
+show_error_codes = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "google.*",
+    "firebase.*",
+    "pywebpush.*",
+    "fastapi_users.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=70",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+    "auth: Authentication related tests",
+    "rooms: Room management tests",
+    "tasks: Task management tests",
+    "categories: Category management tests",
+    "todos: Todo (sub-task) tests",
+    "notifications: Push notification tests",
+    "calendar: Google Calendar integration tests",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/alembic/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+# ==================== RUFF CONFIGURATION ====================
+# Ruff is a fast Python linter that replaces flake8, isort, and more
+[tool.ruff]
+# Target Python version
+target-version = "py311"
+
+# Line length (same as Black)
+line-length = 120
+
+# Exclude directories
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "alembic/versions",
+    "migrations",
+]
+
+[tool.ruff.lint]
+# Enable rule categories
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "RUF",    # Ruff-specific rules
+    "S",      # flake8-bandit (security)
+    "N",      # pep8-naming
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "C90",    # mccabe (complexity)
+    "DJ",     # flake8-django (optional)
+    "DTZ",    # flake8-datetimez
+    "EM",     # flake8-errmsg
+    "EXE",    # flake8-executable
+    "FA",     # flake8-future-annotations
+    "ICN",    # flake8-import-conventions
+    "ISC",    # flake8-implicit-str-concat
+    "LOG",    # flake8-logging
+    "G",      # flake8-logging-format
+    "INP",    # flake8-no-pep420
+    "PIE",    # flake8-pie
+    "PYI",    # flake8-pyi
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SLF",    # flake8-self
+    "SLOT",   # flake8-slots
+    "T10",    # flake8-debugger
+    "T20",    # flake8-print
+    "TCH",    # flake8-type-checking
+    "INT",    # flake8-gettext
+    "TRY",    # tryceratops
+    "FLY",    # flynt
+    "PERF",   # perflint
+    "FURB",   # refurb
+]
+
+# Rules to ignore
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Function call in default argument (FastAPI Depends)
+    "B904",   # Allow raise without from in except
+    "S101",   # Allow assert in tests
+    "S104",   # Possible binding to all interfaces
+    "S105",   # Possible hardcoded password (false positives)
+    "S106",   # Possible hardcoded password (false positives)
+    "RUF012", # Mutable class attributes
+    "COM812", # Missing trailing comma (conflicts with formatter)
+    "ISC001", # Single line implicit string concatenation (conflicts with formatter)
+    "TRY003", # Long messages in exceptions
+    "EM101",  # Exception with string literal
+    "EM102",  # Exception with f-string
+    "ARG001", # Unused function argument (needed for overrides)
+    "ARG002", # Unused method argument
+    "UP007",  # Use X | Y instead of Union (compatibility)
+]
+
+# Allow fix for all enabled rules (when `--fix` is provided)
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use assert and print
+"tests/**/*.py" = ["S101", "T201", "ARG001", "ARG002", "PLR2004"]
+# Alembic migrations
+"alembic/**/*.py" = ["INP001", "E501"]
+# Init files can have unused imports
+"__init__.py" = ["F401"]
+# Config files
+"app/config.py" = ["S105", "S106"]
+
+[tool.ruff.lint.isort]
+# Import sorting settings
+known-first-party = ["app"]
+known-third-party = ["fastapi", "pydantic", "sqlalchemy", "celery", "redis"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.mccabe]
+# Complexity threshold
+max-complexity = 10
+
+[tool.ruff.lint.pep8-naming]
+# Naming conventions
+classmethod-decorators = ["classmethod", "pydantic.validator", "pydantic.root_validator"]
+
+[tool.ruff.lint.flake8-quotes]
+# Quote style
+inline-quotes = "double"
+multiline-quotes = "double"
+docstring-quotes = "double"
+
+[tool.ruff.lint.flake8-pytest-style]
+# Pytest style
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.format]
+# Formatter settings (like Black)
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ==================== BANDIT CONFIGURATION ====================
+[tool.bandit]
+exclude_dirs = ["tests", "alembic"]
+skips = ["B101", "B104", "B105", "B106"]
+
+# ==================== PYLINT CONFIGURATION (Optional) ====================
+[tool.pylint.main]
+ignore = ["migrations", "alembic"]
+ignore-patterns = ["test_.*"]
+jobs = 0  # Auto-detect CPU count
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",  # Missing module docstring
+    "C0115",  # Missing class docstring
+    "C0116",  # Missing function docstring
+    "R0903",  # Too few public methods
+    "R0913",  # Too many arguments
+    "W0511",  # TODO/FIXME comments
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 10
+max-locals = 20

@@ -1,0 +1,13 @@
+{{- if and .Values.backend.enabled .Values.backend.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "eli-maor.fullname" . }}-backend-pdb
+  labels:
+    {{- include "eli-maor.backend.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.backend.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "eli-maor.backend.selectorLabels" . | nindent 6 }}
+{{- end }}

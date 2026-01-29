@@ -1,0 +1,564 @@
+/**
+ * CSS Grid Fallbacks
+ * 
+ * Provides flexbox fallbacks for browsers that don't support CSS Grid.
+ * Uses @supports queries to apply grid only when supported.
+ * 
+ * Browser Support:
+ * - CSS Grid: Chrome 57+, Firefox 52+, Safari 10.1+, Edge 16+
+ * - Flexbox: Chrome 29+, Firefox 22+, Safari 6.1+, Edge 12+, IE11 (partial)
+ */
+
+/* ==================== Base Fallback (No Grid Support) ==================== */
+
+/* Cards grid - Flexbox fallback */
+.grid-cards {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -0.5rem; /* Negative margin for gutter */
+}
+
+.grid-cards > * {
+  flex: 1 1 100%; /* Full width by default (mobile) */
+  max-width: 100%;
+  padding: 0.5rem; /* Gutter */
+  box-sizing: border-box;
+}
+
+/* Tablet: 2 columns */
+@media (min-width: 640px) {
+  .grid-cards > * {
+    flex: 1 1 calc(50% - 1rem);
+    max-width: calc(50% - 1rem);
+  }
+}
+
+/* Desktop: 3 columns */
+@media (min-width: 1024px) {
+  .grid-cards > * {
+    flex: 1 1 calc(33.333% - 1rem);
+    max-width: calc(33.333% - 1rem);
+  }
+}
+
+/* Large Desktop: 4 columns */
+@media (min-width: 1280px) {
+  .grid-cards > * {
+    flex: 1 1 calc(25% - 1rem);
+    max-width: calc(25% - 1rem);
+  }
+}
+
+/* ==================== Grid Support Override ==================== */
+
+@supports (display: grid) {
+  /* Cards grid - CSS Grid when supported */
+  .grid-cards {
+    display: grid;
+    margin: 0; /* Remove negative margin */
+    gap: var(--space-3, 1rem);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  
+  .grid-cards > * {
+    flex: none;
+    max-width: none;
+    padding: 0; /* Remove padding, gap handles spacing */
+  }
+  
+  /* Responsive adjustments */
+  @media (min-width: 475px) {
+    .grid-cards {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .grid-cards {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .grid-cards {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .grid-cards {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+  }
+  
+  @media (min-width: 1920px) {
+    .grid-cards {
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+  }
+  
+  @media (min-width: 2560px) {
+    .grid-cards {
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    }
+  }
+}
+
+/* ==================== Task List Grid ==================== */
+
+/* Flexbox fallback */
+.grid-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 0; /* IE11 doesn't support gap in flex */
+}
+
+.grid-tasks > * {
+  margin-bottom: 0.75rem;
+}
+
+.grid-tasks > *:last-child {
+  margin-bottom: 0;
+}
+
+@supports (display: grid) {
+  .grid-tasks {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .grid-tasks > * {
+    margin-bottom: 0;
+  }
+}
+
+/* ==================== Form Grid ==================== */
+
+/* Flexbox fallback */
+.grid-form {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -0.5rem;
+}
+
+.grid-form > * {
+  flex: 1 1 100%;
+  padding: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .grid-form-2 > * {
+    flex: 1 1 calc(50% - 1rem);
+  }
+  
+  .grid-form-3 > * {
+    flex: 1 1 calc(33.333% - 1rem);
+  }
+}
+
+@supports (display: grid) {
+  .grid-form {
+    display: grid;
+    margin: 0;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+  }
+  
+  .grid-form > * {
+    flex: none;
+    padding: 0;
+  }
+  
+  @media (min-width: 640px) {
+    .grid-form-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .grid-form-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+}
+
+/* ==================== Dashboard Grid ==================== */
+
+/* Flexbox fallback */
+.grid-dashboard {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -0.75rem;
+}
+
+.grid-dashboard > * {
+  flex: 1 1 100%;
+  padding: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .grid-dashboard > * {
+    flex: 1 1 calc(50% - 1.5rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-dashboard > * {
+    flex: 1 1 calc(25% - 1.5rem);
+  }
+}
+
+@supports (display: grid) {
+  .grid-dashboard {
+    display: grid;
+    margin: 0;
+    gap: 1.5rem;
+    grid-template-columns: 1fr;
+  }
+  
+  .grid-dashboard > * {
+    flex: none;
+    padding: 0;
+  }
+  
+  @media (min-width: 640px) {
+    .grid-dashboard {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .grid-dashboard {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+}
+
+/* ==================== Auto-fit Grid ==================== */
+
+/* Flexbox fallback */
+.grid-auto-fit {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -0.5rem;
+}
+
+.grid-auto-fit > * {
+  flex: 1 1 180px;
+  min-width: 180px;
+  max-width: 100%;
+  padding: 0.5rem;
+}
+
+@supports (display: grid) {
+  .grid-auto-fit {
+    display: grid;
+    margin: 0;
+    gap: var(--space-3, 1rem);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  
+  .grid-auto-fit > * {
+    flex: none;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+  }
+}
+
+/* ==================== Numbered Grid Columns ==================== */
+
+/* Flexbox fallback for explicit column counts */
+.grid-cols-2-fallback {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.grid-cols-2-fallback > * {
+  flex: 0 0 50%;
+  max-width: 50%;
+}
+
+.grid-cols-3-fallback {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.grid-cols-3-fallback > * {
+  flex: 0 0 33.333%;
+  max-width: 33.333%;
+}
+
+.grid-cols-4-fallback {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.grid-cols-4-fallback > * {
+  flex: 0 0 25%;
+  max-width: 25%;
+}
+
+@supports (display: grid) {
+  .grid-cols-2-fallback {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .grid-cols-2-fallback > * {
+    flex: none;
+    max-width: none;
+  }
+  
+  .grid-cols-3-fallback {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  
+  .grid-cols-3-fallback > * {
+    flex: none;
+    max-width: none;
+  }
+  
+  .grid-cols-4-fallback {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  
+  .grid-cols-4-fallback > * {
+    flex: none;
+    max-width: none;
+  }
+}
+
+/* ==================== Subgrid Fallback ==================== */
+
+/* Subgrid is less supported, always provide fallback */
+.subgrid-fallback {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.subgrid-fallback > * {
+  flex: 1;
+}
+
+@supports (grid-template-columns: subgrid) {
+  .subgrid-fallback {
+    display: grid;
+    grid-template-columns: subgrid;
+  }
+}
+
+/* ==================== Gap Fallback ==================== */
+
+/* IE11 doesn't support gap in flexbox */
+.flex-gap-fallback {
+  display: flex;
+  margin: -0.5rem;
+}
+
+.flex-gap-fallback > * {
+  margin: 0.5rem;
+}
+
+@supports (gap: 1rem) {
+  .flex-gap-fallback {
+    margin: 0;
+    gap: 1rem;
+  }
+  
+  .flex-gap-fallback > * {
+    margin: 0;
+  }
+}
+
+/* ==================== Aspect Ratio Fallback ==================== */
+
+/* Fallback for aspect-ratio using padding trick */
+.aspect-16-9-fallback {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 56.25%; /* 9/16 * 100 */
+}
+
+.aspect-16-9-fallback > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.aspect-4-3-fallback {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 75%; /* 3/4 * 100 */
+}
+
+.aspect-4-3-fallback > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.aspect-1-1-fallback {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%;
+}
+
+.aspect-1-1-fallback > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+@supports (aspect-ratio: 1) {
+  .aspect-16-9-fallback,
+  .aspect-4-3-fallback,
+  .aspect-1-1-fallback {
+    height: auto;
+    padding-bottom: 0;
+  }
+  
+  .aspect-16-9-fallback {
+    aspect-ratio: 16 / 9;
+  }
+  
+  .aspect-4-3-fallback {
+    aspect-ratio: 4 / 3;
+  }
+  
+  .aspect-1-1-fallback {
+    aspect-ratio: 1 / 1;
+  }
+  
+  .aspect-16-9-fallback > *,
+  .aspect-4-3-fallback > *,
+  .aspect-1-1-fallback > * {
+    position: static;
+    width: auto;
+    height: auto;
+  }
+}
+
+/* ==================== Place Items Fallback ==================== */
+
+/* Centering fallback */
+.center-fallback {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@supports (display: grid) {
+  .center-grid {
+    display: grid;
+    place-items: center;
+  }
+}
+
+/* ==================== Min-Max Fallback ==================== */
+
+/* minmax() fallback using max-width */
+.minmax-fallback {
+  width: 100%;
+  max-width: 300px;
+  min-width: 200px;
+}
+
+/* ==================== Container Queries Fallback ==================== */
+
+/* Container queries fallback using media queries */
+.cq-fallback {
+  /* Mobile: 1 column */
+}
+
+@media (min-width: 400px) {
+  .cq-fallback.cq-cols-2 {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  
+  .cq-fallback.cq-cols-2 > * {
+    flex: 1 1 calc(50% - 1rem);
+  }
+}
+
+@media (min-width: 600px) {
+  .cq-fallback.cq-cols-3 > * {
+    flex: 1 1 calc(33.333% - 1rem);
+  }
+}
+
+@supports (container-type: inline-size) {
+  .cq-supported {
+    container-type: inline-size;
+  }
+  
+  /* Override fallback when container queries are supported */
+  @container (min-width: 400px) {
+    .cq-cols-2 > * {
+      flex: 1 1 calc(50% - 1rem);
+    }
+  }
+}
+
+/* ==================== IE11 Specific Fixes ==================== */
+
+/* IE11 detection using media query hack */
+@media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+  /* IE11 specific styles */
+  
+  /* Disable CSS variables fallback */
+  :root {
+    /* Use static values for IE11 */
+  }
+  
+  /* Fix flexbox bugs in IE11 */
+  .flex-ie11-fix {
+    flex-shrink: 0;
+  }
+  
+  /* Fix min-height bug in IE11 */
+  .min-h-ie11-fix {
+    height: 100%;
+  }
+  
+  /* Remove sticky positioning (not supported well) */
+  .sticky {
+    position: relative;
+  }
+}
+
+/* ==================== Print Styles ==================== */
+
+@media print {
+  .grid-cards,
+  .grid-tasks,
+  .grid-dashboard,
+  .grid-auto-fit {
+    display: block;
+  }
+  
+  .grid-cards > *,
+  .grid-tasks > *,
+  .grid-dashboard > *,
+  .grid-auto-fit > * {
+    display: block;
+    width: 100%;
+    max-width: none;
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+}

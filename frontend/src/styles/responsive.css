@@ -1,0 +1,525 @@
+/**
+ * Responsive Design Utilities
+ * 
+ * Fluid typography and spacing using CSS clamp()
+ * for smooth scaling across all screen sizes.
+ */
+
+/* ==================== Fluid Typography ==================== */
+:root {
+  /* Base scale: 16px at 320px viewport, 20px at 1920px viewport */
+  --fluid-min-viewport: 320;
+  --fluid-max-viewport: 1920;
+  
+  /* Fluid font sizes */
+  --font-size-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --font-size-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+  --font-size-base: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);
+  --font-size-lg: clamp(1.125rem, 1rem + 0.625vw, 1.25rem);
+  --font-size-xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+  --font-size-2xl: clamp(1.5rem, 1.25rem + 1.25vw, 2rem);
+  --font-size-3xl: clamp(1.875rem, 1.5rem + 1.875vw, 2.5rem);
+  --font-size-4xl: clamp(2.25rem, 1.75rem + 2.5vw, 3rem);
+  --font-size-5xl: clamp(3rem, 2.25rem + 3.75vw, 4rem);
+  
+  /* Fluid spacing */
+  --space-1: clamp(0.25rem, 0.5vw, 0.5rem);
+  --space-2: clamp(0.5rem, 1vw, 1rem);
+  --space-3: clamp(0.75rem, 1.5vw, 1.5rem);
+  --space-4: clamp(1rem, 2vw, 2rem);
+  --space-6: clamp(1.5rem, 3vw, 3rem);
+  --space-8: clamp(2rem, 4vw, 4rem);
+  --space-12: clamp(3rem, 6vw, 6rem);
+  --space-16: clamp(4rem, 8vw, 8rem);
+  
+  /* Container padding */
+  --container-padding: clamp(1rem, 3vw, 2rem);
+}
+
+/* ==================== Responsive Headings ==================== */
+.heading-1 {
+  font-size: var(--font-size-5xl);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.heading-2 {
+  font-size: var(--font-size-4xl);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.heading-3 {
+  font-size: var(--font-size-3xl);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.heading-4 {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.heading-5 {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.heading-6 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* ==================== Container Queries ==================== */
+
+/* Fallback: Use media queries for browsers without container query support */
+.cq\:flex-row {
+  flex-direction: column;
+}
+
+.cq\:grid-cols-2 {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.cq\:grid-cols-2 > * {
+  flex: 1 1 100%;
+}
+
+.cq\:grid-cols-3 {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.cq\:grid-cols-3 > * {
+  flex: 1 1 100%;
+}
+
+.cq\:grid-cols-4 {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.cq\:grid-cols-4 > * {
+  flex: 1 1 100%;
+}
+
+/* Media query fallbacks */
+@media (min-width: 400px) {
+  .cq\:flex-row {
+    flex-direction: row;
+  }
+  
+  .cq\:grid-cols-2 > * {
+    flex: 1 1 calc(50% - 0.5rem);
+  }
+}
+
+@media (min-width: 600px) {
+  .cq\:grid-cols-3 > * {
+    flex: 1 1 calc(33.333% - 0.67rem);
+  }
+}
+
+@media (min-width: 800px) {
+  .cq\:grid-cols-4 > * {
+    flex: 1 1 calc(25% - 0.75rem);
+  }
+}
+
+/* Container queries when supported */
+@supports (container-type: inline-size) {
+  /* Enable container queries on wrapper */
+  .container-query {
+    container-type: inline-size;
+  }
+
+  /* Container-based responsive styles */
+  @container (min-width: 400px) {
+    .cq\:flex-row {
+      flex-direction: row;
+    }
+    .cq\:grid-cols-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    
+    .cq\:grid-cols-2 > * {
+      flex: none;
+    }
+  }
+
+  @container (min-width: 600px) {
+    .cq\:grid-cols-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    
+    .cq\:grid-cols-3 > * {
+      flex: none;
+    }
+  }
+
+  @container (min-width: 800px) {
+    .cq\:grid-cols-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    
+    .cq\:grid-cols-4 > * {
+      flex: none;
+    }
+  }
+}
+
+/* ==================== Touch Device Optimizations ==================== */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets on touch devices */
+  button, 
+  a, 
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* More spacing between interactive elements */
+  .touch-spacing > * + * {
+    margin-top: 0.75rem;
+  }
+  
+  /* Disable hover effects on touch */
+  .no-touch-hover:hover {
+    transform: none !important;
+    box-shadow: inherit !important;
+  }
+}
+
+/* Mouse/pointer device enhancements */
+@media (hover: hover) and (pointer: fine) {
+  /* Enable smooth transitions on hover-capable devices */
+  .hover-transitions {
+    transition: all 0.2s ease;
+  }
+  
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* ==================== 4K / High DPI Optimizations ==================== */
+@media (min-width: 2560px) {
+  :root {
+    /* Larger base sizes for 4K */
+    --font-size-base: 1.25rem;
+    --space-4: 2.5rem;
+    --container-padding: 3rem;
+  }
+  
+  /* Larger touch targets on 4K */
+  button, a, [role="button"] {
+    min-height: 52px;
+    min-width: 52px;
+  }
+}
+
+@media (min-resolution: 2dppx) {
+  /* High DPI specific styles */
+  .border,
+  .border-t,
+  .border-b,
+  .border-l,
+  .border-r {
+    border-width: 0.5px;
+  }
+}
+
+/* ==================== Responsive Grid Utilities ==================== */
+
+/* Flexbox fallback for .grid-responsive-1 */
+.grid-responsive-1 {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -0.5rem;
+}
+
+.grid-responsive-1 > * {
+  flex: 1 1 100%;
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+@media (min-width: 475px) {
+  .grid-responsive-1 > * {
+    flex: 1 1 calc(50% - 1rem);
+  }
+}
+
+@media (min-width: 768px) {
+  .grid-responsive-1 > * {
+    flex: 1 1 calc(33.333% - 1rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-responsive-1 > * {
+    flex: 1 1 calc(25% - 1rem);
+  }
+}
+
+@media (min-width: 1920px) {
+  .grid-responsive-1 > * {
+    flex: 1 1 calc(20% - 1rem);
+  }
+}
+
+@media (min-width: 2560px) {
+  .grid-responsive-1 > * {
+    flex: 1 1 calc(16.666% - 1rem);
+  }
+}
+
+/* Grid enhancement when supported */
+@supports (display: grid) {
+  .grid-responsive-1 {
+    display: grid;
+    margin: 0;
+    gap: var(--space-3, 1rem);
+    grid-template-columns: 1fr;
+  }
+  
+  .grid-responsive-1 > * {
+    flex: none;
+    padding: 0;
+  }
+
+  @media (min-width: 475px) {
+    .grid-responsive-1 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .grid-responsive-1 > * {
+      flex: none;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .grid-responsive-1 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .grid-responsive-1 > * {
+      flex: none;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .grid-responsive-1 {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .grid-responsive-1 > * {
+      flex: none;
+    }
+  }
+
+  @media (min-width: 1920px) {
+    .grid-responsive-1 {
+      grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .grid-responsive-1 > * {
+      flex: none;
+    }
+  }
+
+  @media (min-width: 2560px) {
+    .grid-responsive-1 {
+      grid-template-columns: repeat(6, 1fr);
+    }
+    
+    .grid-responsive-1 > * {
+      flex: none;
+    }
+  }
+}
+
+/* ==================== Safe Areas (Mobile) ==================== */
+.safe-area-inset-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.safe-area-inset-left {
+  padding-left: env(safe-area-inset-left, 0);
+}
+
+.safe-area-inset-right {
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+/* ==================== Orientation Specific ==================== */
+@media (orientation: portrait) {
+  .portrait\:hidden {
+    display: none;
+  }
+  
+  .portrait\:flex-col {
+    flex-direction: column;
+  }
+}
+
+@media (orientation: landscape) {
+  .landscape\:hidden {
+    display: none;
+  }
+  
+  .landscape\:flex-row {
+    flex-direction: row;
+  }
+  
+  /* Reduce vertical spacing in landscape */
+  .landscape\:py-2 {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* ==================== Aspect Ratio Helpers ==================== */
+
+/* Padding-based fallback for aspect-ratio */
+.aspect-card {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 75%; /* 3/4 = 75% */
+}
+
+.aspect-card > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.aspect-hero {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 56.25%; /* 9/16 = 56.25% */
+}
+
+.aspect-hero > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.aspect-portrait {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 133.33%; /* 4/3 = 133.33% */
+}
+
+.aspect-portrait > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 640px) {
+  .sm\:aspect-square {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 100%;
+  }
+  
+  .sm\:aspect-square > * {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* Native aspect-ratio when supported */
+@supports (aspect-ratio: 1) {
+  .aspect-card {
+    position: static;
+    height: auto;
+    padding-bottom: 0;
+    aspect-ratio: 4 / 3;
+  }
+  
+  .aspect-card > * {
+    position: static;
+    width: auto;
+    height: auto;
+  }
+
+  .aspect-hero {
+    position: static;
+    height: auto;
+    padding-bottom: 0;
+    aspect-ratio: 16 / 9;
+  }
+  
+  .aspect-hero > * {
+    position: static;
+    width: auto;
+    height: auto;
+  }
+
+  .aspect-portrait {
+    position: static;
+    height: auto;
+    padding-bottom: 0;
+    aspect-ratio: 3 / 4;
+  }
+  
+  .aspect-portrait > * {
+    position: static;
+    width: auto;
+    height: auto;
+  }
+
+  @media (max-width: 640px) {
+    .sm\:aspect-square {
+      position: static;
+      height: auto;
+      padding-bottom: 0;
+      aspect-ratio: 1 / 1;
+    }
+    
+    .sm\:aspect-square > * {
+      position: static;
+      width: auto;
+      height: auto;
+    }
+  }
+}

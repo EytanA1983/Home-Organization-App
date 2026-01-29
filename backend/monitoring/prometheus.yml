@@ -1,0 +1,28 @@
+# Prometheus configuration
+global:
+  scrape_interval: 15s  # How often to scrape targets
+  evaluation_interval: 15s  # How often to evaluate rules
+  external_labels:
+    cluster: 'eli-maor'
+    environment: 'production'
+
+# Scrape configurations
+scrape_configs:
+  # FastAPI application metrics
+  - job_name: 'fastapi'
+    static_configs:
+      - targets: ['backend:8000']
+        labels:
+          service: 'backend'
+          app: 'eli-maor'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Alerting rules (optional)
+# rule_files:
+#   - "alerts.yml"

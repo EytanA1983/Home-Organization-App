@@ -1,0 +1,173 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: eli-maor
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: your-registry/eli-maor-backend:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: redis-url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: secret-key
+        - name: GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: google-client-id
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: google-client-secret
+        - name: VAPID_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: vapid-public-key
+        - name: VAPID_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: vapid-private-key
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  labels:
+    app: eli-maor
+    component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: worker
+    spec:
+      containers:
+      - name: worker
+        image: your-registry/eli-maor-backend:latest
+        command: ["celery", "-A", "app.workers.celery_app.celery", "worker", "--loglevel=info", "--concurrency=4"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: redis-url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: secret-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  labels:
+    app: eli-maor
+    component: beat
+spec:
+  replicas: 1  # Use Redis lock for HA
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: beat
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: beat
+    spec:
+      containers:
+      - name: beat
+        image: your-registry/eli-maor-backend:latest
+        command: ["celery", "-A", "app.workers.celery_app.celery", "beat", "--loglevel=info"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: redis-url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eli-maor-secrets
+              key: secret-key
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

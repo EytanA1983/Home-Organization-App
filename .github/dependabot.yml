@@ -1,0 +1,110 @@
+# Dependabot Configuration
+# Automatically creates PRs for dependency updates and security patches
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # ==================== Backend (Python) ====================
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "maore" # Replace with your GitHub username
+    assignees:
+      - "maore"
+    labels:
+      - "dependencies"
+      - "backend"
+      - "python"
+    commit-message:
+      prefix: "chore(backend)"
+      include: "scope"
+    # Group minor and patch updates together
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    # Ignore specific packages (if needed)
+    ignore:
+      # Example: Ignore major version updates for FastAPI
+      # - dependency-name: "fastapi"
+      #   update-types: ["version-update:semver-major"]
+    # Security updates are always created immediately
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+
+  # ==================== Frontend (npm) ====================
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "maore"
+    assignees:
+      - "maore"
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "javascript"
+    commit-message:
+      prefix: "chore(frontend)"
+      include: "scope"
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    # Ignore major version updates for React (example)
+    # ignore:
+    #   - dependency-name: "react"
+    #     update-types: ["version-update:semver-major"]
+
+  # ==================== GitHub Actions ====================
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "maore"
+    labels:
+      - "dependencies"
+      - "ci/cd"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+
+  # ==================== Docker ====================
+  # Uncomment if using Dockerfiles
+  # - package-ecosystem: "docker"
+  #   directory: "/backend"
+  #   schedule:
+  #     interval: "weekly"
+  #   labels:
+  #     - "dependencies"
+  #     - "docker"

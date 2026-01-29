@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Bathroom background">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#B4E7B5"/>
+      <stop offset="50%" stop-color="#AEDFF7"/>
+      <stop offset="100%" stop-color="#FAF3E0"/>
+    </linearGradient>
+    <radialGradient id="bubble" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <g opacity="0.55">
+    <circle cx="420" cy="260" r="180" fill="url(#bubble)"/>
+    <circle cx="980" cy="340" r="220" fill="url(#bubble)"/>
+    <circle cx="1240" cy="220" r="140" fill="url(#bubble)"/>
+    <circle cx="680" cy="640" r="260" fill="url(#bubble)"/>
+  </g>
+  <g opacity="0.18" fill="#1f2937">
+    <path d="M80 760 C 260 640, 420 900, 620 780 S 980 720, 1200 820 S 1440 760, 1560 820 L1560 900 L80 900 Z"/>
+  </g>
+</svg>

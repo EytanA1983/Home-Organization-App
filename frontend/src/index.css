@@ -1,0 +1,466 @@
+/**
+ * Main CSS file with Tailwind CSS
+ *
+ * Structure:
+ * 1. @import (fonts) - MUST be first
+ * 2. @tailwind directives
+ * 3. @layer base - Reset and base styles
+ * 4. @layer components - Reusable component classes
+ * 5. @layer utilities - Custom utility classes
+ */
+
+/* ==================== 1. FONTS ==================== */
+/* Hebrew optimized fonts - loaded first for performance */
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&family=Rubik:wght@300;400;500;600;700&family=Heebo:wght@300;400;500;600;700&display=swap');
+
+/* ==================== 2. TAILWIND ==================== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==================== 2.2 TAILWIND @apply (only in module) ==================== */
+@import './styles/tailwind-apply.module.css';
+
+/* ==================== 2.5 RESPONSIVE UTILITIES ==================== */
+@import './styles/responsive.css';
+
+/* ==================== 2.6 GRID FALLBACKS ==================== */
+/* Flexbox fallbacks for older browsers (IE11) */
+@import './styles/grid-fallback.css';
+
+/* ==================== 3. BASE LAYER ==================== */
+@layer base {
+  /* Root variables for easy theming */
+  :root {
+    /* Primary colors */
+    --color-primary: #3b82f6;
+    --color-primary-hover: #2563eb;
+    --color-primary-active: #1d4ed8;
+    --color-secondary: #10b981;
+    --color-secondary-hover: #059669;
+    --color-secondary-active: #047857;
+
+    /* Light mode colors */
+    --color-cream: #FAF3E0;
+    --color-sky: #AEDFF7;
+    --color-mint: #B4E7B5;
+    --color-blush: #F7C6C6;
+    --color-earth: #D4A574;
+
+    /* Light mode semantic colors */
+    --color-bg: #ffffff;
+    --color-surface: #FFFFFF;
+    --color-text: #1f2937;
+    --color-text-muted: #6b7280;
+    --color-border: #e5e7eb;
+    --color-shadow: rgba(0, 0, 0, 0.1);
+
+    /* Theme transition timing */
+    --theme-transition: 0.2s ease;
+
+    /* ===== Room Color Schemes (Light Mode) ===== */
+
+    /* Living Room - סלון */
+    --room-living-primary: #AEDFF7;
+    --room-living-secondary: #87CEEB;
+    --room-living-bg: linear-gradient(135deg, #AEDFF7 0%, #87CEEB 100%);
+    --room-living-text: #1e3a5f;
+    --room-living-accent: #4a90a4;
+
+    /* Kitchen - מטבח */
+    --room-kitchen-primary: #FFE4B5;
+    --room-kitchen-secondary: #FFA500;
+    --room-kitchen-bg: linear-gradient(135deg, #FFE4B5 0%, #FFDAB9 100%);
+    --room-kitchen-text: #8b4513;
+    --room-kitchen-accent: #d4a574;
+
+    /* Bedroom - חדר שינה */
+    --room-bedroom-primary: #E6E6FA;
+    --room-bedroom-secondary: #DDA0DD;
+    --room-bedroom-bg: linear-gradient(135deg, #E6E6FA 0%, #D8BFD8 100%);
+    --room-bedroom-text: #4b0082;
+    --room-bedroom-accent: #9370db;
+
+    /* Bathroom - שירותים/אמבטיה */
+    --room-bathroom-primary: #B4E7B5;
+    --room-bathroom-secondary: #98FB98;
+    --room-bathroom-bg: linear-gradient(135deg, #B4E7B5 0%, #90EE90 100%);
+    --room-bathroom-text: #228b22;
+    --room-bathroom-accent: #3cb371;
+
+    /* Office - משרד */
+    --room-office-primary: #D3D3D3;
+    --room-office-secondary: #A9A9A9;
+    --room-office-bg: linear-gradient(135deg, #E8E8E8 0%, #D3D3D3 100%);
+    --room-office-text: #2f4f4f;
+    --room-office-accent: #708090;
+
+    /* Balcony - מרפסת */
+    --room-balcony-primary: #98FB98;
+    --room-balcony-secondary: #90EE90;
+    --room-balcony-bg: linear-gradient(135deg, #98FB98 0%, #7CFC00 100%);
+    --room-balcony-text: #006400;
+    --room-balcony-accent: #32cd32;
+
+    /* Closet - ארון */
+    --room-closet-primary: #DEB887;
+    --room-closet-secondary: #D2B48C;
+    --room-closet-bg: linear-gradient(135deg, #DEB887 0%, #C4A77D 100%);
+    --room-closet-text: #8b4513;
+    --room-closet-accent: #a0522d;
+
+    /* Kids Room - חדר ילדים */
+    --room-kids-primary: #FFB6C1;
+    --room-kids-secondary: #FFC0CB;
+    --room-kids-bg: linear-gradient(135deg, #FFB6C1 0%, #FFD1DC 100%);
+    --room-kids-text: #c71585;
+    --room-kids-accent: #ff69b4;
+
+    /* Laundry - מכבסה */
+    --room-laundry-primary: #ADD8E6;
+    --room-laundry-secondary: #B0E0E6;
+    --room-laundry-bg: linear-gradient(135deg, #ADD8E6 0%, #87CEEB 100%);
+    --room-laundry-text: #4682b4;
+    --room-laundry-accent: #5f9ea0;
+
+    /* Garage - מוסך */
+    --room-garage-primary: #C0C0C0;
+    --room-garage-secondary: #A9A9A9;
+    --room-garage-bg: linear-gradient(135deg, #C0C0C0 0%, #808080 100%);
+    --room-garage-text: #2f4f4f;
+    --room-garage-accent: #696969;
+
+    /* Default Room - ברירת מחדל */
+    --room-default-primary: #B4E7B5;
+    --room-default-secondary: #98D99F;
+    --room-default-bg: linear-gradient(135deg, #B4E7B5 0%, #98D99F 100%);
+    --room-default-text: #2d5a3d;
+    --room-default-accent: #4a9960;
+
+    /* Progress bar colors */
+    --progress-bg: var(--color-cream);
+    --progress-fill: linear-gradient(90deg, var(--color-sky), #7BC4E8);
+    --progress-complete: linear-gradient(90deg, #10B981, #34D399);
+  }
+
+  /* Dark mode - applies when html has .dark class OR [data-theme='dark'] attribute */
+  /* WCAG AA compliant: All text has contrast ratio >= 4.5:1 */
+  .dark,
+  [data-theme='dark'] {
+    /* Primary colors (adjusted for dark mode) */
+    --color-primary: #60a5fa;
+    --color-primary-hover: #3b82f6;
+    --color-primary-active: #2563eb;
+    --color-secondary: #34d399;
+    --color-secondary-hover: #10b981;
+    --color-secondary-active: #059669;
+
+    /* Dark mode semantic colors */
+    --color-bg: #111827;        /* gray-900 - ensures high contrast with light text */
+    --color-surface: #1f2937;   /* gray-800 - better contrast than #2d2d2d */
+    --color-text: #f3f4f6;      /* gray-100 - 15.8:1 contrast on gray-900 */
+    --color-text-muted: #d1d5db; /* gray-300 - 7.1:1 contrast on gray-900, 4.8:1 on gray-800 */
+    --color-border: #404040;
+    --color-shadow: rgba(0, 0, 0, 0.3);
+
+    /* Adjust colors for dark mode */
+    --color-cream: #2d2d2d;
+    --color-sky: #3b82f6;
+    --color-mint: #22c55e;
+    --color-blush: #f43f5e;
+    --color-earth: #d97706;
+
+    /* ===== Room Color Schemes (Dark Mode) ===== */
+
+    /* Living Room */
+    --room-living-primary: #1e3a5f;
+    --room-living-secondary: #2c4a6e;
+    --room-living-bg: linear-gradient(135deg, #1e3a5f 0%, #2c4a6e 100%);
+    --room-living-text: #e0f0ff;
+    --room-living-accent: #6ba3c7;
+
+    /* Kitchen */
+    --room-kitchen-primary: #5c4033;
+    --room-kitchen-secondary: #6d4c36;
+    --room-kitchen-bg: linear-gradient(135deg, #5c4033 0%, #6d4c36 100%);
+    --room-kitchen-text: #ffe4b5;
+    --room-kitchen-accent: #daa520;
+
+    /* Bedroom */
+    --room-bedroom-primary: #3d2f5e;
+    --room-bedroom-secondary: #4a3a6e;
+    --room-bedroom-bg: linear-gradient(135deg, #3d2f5e 0%, #4a3a6e 100%);
+    --room-bedroom-text: #e6e6fa;
+    --room-bedroom-accent: #b19cd9;
+
+    /* Bathroom */
+    --room-bathroom-primary: #1e4d2b;
+    --room-bathroom-secondary: #2a5f38;
+    --room-bathroom-bg: linear-gradient(135deg, #1e4d2b 0%, #2a5f38 100%);
+    --room-bathroom-text: #b4e7b5;
+    --room-bathroom-accent: #5cb85c;
+
+    /* Office */
+    --room-office-primary: #2f3640;
+    --room-office-secondary: #3d4552;
+    --room-office-bg: linear-gradient(135deg, #2f3640 0%, #3d4552 100%);
+    --room-office-text: #e8e8e8;
+    --room-office-accent: #95a5a6;
+
+    /* Balcony */
+    --room-balcony-primary: #1a3d1a;
+    --room-balcony-secondary: #275227;
+    --room-balcony-bg: linear-gradient(135deg, #1a3d1a 0%, #275227 100%);
+    --room-balcony-text: #98fb98;
+    --room-balcony-accent: #4CAF50;
+
+    /* Closet */
+    --room-closet-primary: #4a3728;
+    --room-closet-secondary: #5a4432;
+    --room-closet-bg: linear-gradient(135deg, #4a3728 0%, #5a4432 100%);
+    --room-closet-text: #deb887;
+    --room-closet-accent: #c19a6b;
+
+    /* Kids Room */
+    --room-kids-primary: #5c2a3d;
+    --room-kids-secondary: #6e3549;
+    --room-kids-bg: linear-gradient(135deg, #5c2a3d 0%, #6e3549 100%);
+    --room-kids-text: #ffb6c1;
+    --room-kids-accent: #ff69b4;
+
+    /* Laundry */
+    --room-laundry-primary: #1e3a5f;
+    --room-laundry-secondary: #2c4a6e;
+    --room-laundry-bg: linear-gradient(135deg, #1e3a5f 0%, #2c4a6e 100%);
+    --room-laundry-text: #add8e6;
+    --room-laundry-accent: #6495ed;
+
+    /* Garage */
+    --room-garage-primary: #2f3640;
+    --room-garage-secondary: #3d4552;
+    --room-garage-bg: linear-gradient(135deg, #2f3640 0%, #3d4552 100%);
+    --room-garage-text: #c0c0c0;
+    --room-garage-accent: #778899;
+
+    /* Default Room */
+    --room-default-primary: #2d4a3d;
+    --room-default-secondary: #3a5a4d;
+    --room-default-bg: linear-gradient(135deg, #2d4a3d 0%, #3a5a4d 100%);
+    --room-default-text: #b4e7b5;
+    --room-default-accent: #6ab77b;
+
+    /* Progress bar colors */
+    --progress-bg: #1a1a1a;
+    --progress-fill: linear-gradient(90deg, #3b82f6, #60a5fa);
+    --progress-complete: linear-gradient(90deg, #059669, #10B981);
+  }
+
+  /* Theme transition styles - added by ThemeProvider after mount */
+  html.theme-transitions,
+  html.theme-transitions *,
+  html.theme-transitions *::before,
+  html.theme-transitions *::after {
+    transition-property: color, background-color, border-color, box-shadow, fill, stroke;
+    transition-timing-function: ease;
+    transition-duration: var(--theme-transition);
+  }
+
+  /* Disable transitions for elements that shouldn't animate */
+  html.theme-transitions .no-theme-transition,
+  html.theme-transitions .no-theme-transition *,
+  html.theme-transitions video,
+  html.theme-transitions img {
+    transition: none !important;
+  }
+
+  /* Base HTML styles */
+  /* RTL support for Hebrew */
+  [dir="rtl"] {
+    text-align: right;
+  }
+
+  /* Global scrollbar styling */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+}
+
+/* ==================== 4. COMPONENTS LAYER ==================== */
+/* Note: Tailwind @apply rules moved to ./styles/tailwind-apply.module.css */
+
+/* ==================== 5. UTILITIES LAYER ==================== */
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Thin scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+
+  /* Text truncate with ellipsis */
+  .truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .truncate-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Glass effect */
+
+  /* Gradient text */
+
+  /* Safe area padding for mobile */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Animation delays */
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+
+  /* ==================== ACCESSIBILITY UTILITIES ==================== */
+
+  /* Screen reader only - visually hidden but accessible */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Undo sr-only (for skip links) */
+  .not-sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  /* Focus visible ring - consistent focus indicator */
+
+  /* Touch target - minimum 44x44px for WCAG 2.1 */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .touch-target-sm {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* Reduced motion - respect user preferences */
+  @media (prefers-reduced-motion: reduce) {
+    .motion-safe\:animate-spin,
+    .motion-safe\:animate-bounce,
+    .motion-safe\:animate-pulse {
+      animation: none !important;
+    }
+
+    .motion-reduce\:transition-none {
+      transition: none !important;
+    }
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .high-contrast\:border-2 {
+      border-width: 2px !important;
+    }
+
+    .high-contrast\:font-bold {
+      font-weight: bold !important;
+    }
+  }
+
+  /* Forced colors mode (Windows High Contrast) */
+  @media (forced-colors: active) {
+    .forced-colors\:border {
+      border: 1px solid CanvasText !important;
+    }
+
+    /* Ensure focus is visible in forced colors */
+    :focus-visible {
+      outline: 2px solid Highlight !important;
+      outline-offset: 2px !important;
+    }
+  }
+
+  /* Skip link styles */
+
+  /* Clickable area expander (for small targets) */
+  .click-area-expand {
+    position: relative;
+  }
+
+  .click-area-expand::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    bottom: -8px;
+    left: -8px;
+  }
+
+  /* Color contrast helpers */
+
+  /* Keyboard focus indicator */
+
+  /* Disable text selection where appropriate */
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Enable text selection for content */
+  .selectable {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* Announce changes to screen readers */
+  [aria-live="polite"],
+  [aria-live="assertive"] {
+    /* Ensure live regions are not visually hidden by accident */
+  }
+
+  /* Error state styling */
+
+  /* Success state styling */
+
+  /* Warning state styling */
+}

@@ -1,0 +1,266 @@
+# ==================== Docker Compose - Observability Stack ====================
+# Includes: Prometheus, Grafana, Jaeger, Alertmanager
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# Access:
+#   - Grafana: http://localhost:3001 (admin/admin)
+#   - Prometheus: http://localhost:9090
+#   - Jaeger: http://localhost:16686
+#   - Alertmanager: http://localhost:9093
+
+version: "3.9"
+
+services:
+  # ==================== Prometheus ====================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: eli_maor_prometheus
+    hostname: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=prometheus"
+      - "app.tier=observability"
+
+  # ==================== Grafana ====================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: eli_maor_grafana
+    hostname: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-clock-panel
+      # Auth
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_BASIC_ENABLED=true
+      # Features
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=grafana"
+      - "app.tier=observability"
+
+  # ==================== Jaeger (Tracing) ====================
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: eli_maor_jaeger
+    hostname: jaeger
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "5775:5775/udp"   # Agent - accept zipkin.thrift over compact thrift protocol
+      - "6831:6831/udp"   # Agent - accept jaeger.thrift over compact thrift protocol
+      - "6832:6832/udp"   # Agent - accept jaeger.thrift over binary thrift protocol
+      - "5778:5778"       # Agent - serve configs
+      - "16686:16686"     # Query - UI
+      - "14268:14268"     # Collector - accept jaeger.thrift directly from clients
+      - "14250:14250"     # Collector - accept model.proto
+      - "9411:9411"       # Collector - Zipkin compatible endpoint
+      - "4317:4317"       # OTLP gRPC
+      - "4318:4318"       # OTLP HTTP
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=jaeger"
+      - "app.tier=observability"
+
+  # ==================== Alertmanager ====================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: eli_maor_alertmanager
+    hostname: alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=alertmanager"
+      - "app.tier=observability"
+
+  # ==================== OpenTelemetry Collector (Optional) ====================
+  # otel-collector:
+  #   image: otel/opentelemetry-collector-contrib:0.91.0
+  #   container_name: eli_maor_otel_collector
+  #   hostname: otel-collector
+  #   command: ["--config=/etc/otel-collector-config.yml"]
+  #   volumes:
+  #     - ./observability/otel/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+  #   ports:
+  #     - "4317:4317"   # OTLP gRPC
+  #     - "4318:4318"   # OTLP HTTP
+  #     - "8888:8888"   # Prometheus metrics
+  #     - "8889:8889"   # Prometheus exporter metrics
+  #   depends_on:
+  #     - jaeger
+  #     - prometheus
+  #   networks:
+  #     - app-network
+
+  # ==================== Loki (Log Aggregation - Optional) ====================
+  # loki:
+  #   image: grafana/loki:2.9.2
+  #   container_name: eli_maor_loki
+  #   hostname: loki
+  #   command: -config.file=/etc/loki/local-config.yaml
+  #   volumes:
+  #     - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+  #     - loki_data:/loki
+  #   ports:
+  #     - "3100:3100"
+  #   networks:
+  #     - app-network
+
+  # ==================== Node Exporter (Host Metrics) ====================
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: eli_maor_node_exporter
+    hostname: node-exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=node-exporter"
+      - "app.tier=observability"
+
+  # ==================== Redis Exporter ====================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: eli_maor_redis_exporter
+    hostname: redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=redis-exporter"
+      - "app.tier=observability"
+
+  # ==================== Postgres Exporter ====================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: eli_maor_postgres_exporter
+    hostname: postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:postgres@db:5432/eli_maor?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      - "app.service=postgres-exporter"
+      - "app.tier=observability"
+
+  # ==================== Backend with Tracing ====================
+  backend:
+    environment:
+      # OpenTelemetry configuration
+      - OTEL_TRACING_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=eli-maor-backend
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=production,service.version=1.0.0
+      # Or use Jaeger directly
+      # - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+    depends_on:
+      - jaeger
+      - prometheus
+
+  # ==================== Worker with Tracing ====================
+  worker:
+    environment:
+      - OTEL_TRACING_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=eli-maor-worker
+
+# ==================== Volumes ====================
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  # loki_data:
+  #   driver: local
+
+networks:
+  app-network:
+    external: true

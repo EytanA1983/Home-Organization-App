@@ -1,0 +1,76 @@
+{{- if .Values.beat.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eli-maor.fullname" . }}-beat
+  labels:
+    {{- include "eli-maor.beat.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/change-cause: "Helm release {{ .Release.Revision }}"
+spec:
+  # Only ONE beat instance should ever run
+  replicas: {{ .Values.beat.replicaCount }}
+  revisionHistoryLimit: {{ .Values.beat.revisionHistoryLimit | default 5 }}
+
+  # Recreate strategy ensures only one beat runs
+  strategy:
+    {{- toYaml .Values.beat.strategy | nindent 4 }}
+
+  selector:
+    matchLabels:
+      {{- include "eli-maor.beat.selectorLabels" . | nindent 6 }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "eli-maor.beat.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "eli-maor.configChecksum" . }}
+        checksum/secret: {{ include "eli-maor.secretChecksum" . }}
+    spec:
+      serviceAccountName: {{ include "eli-maor.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 30
+
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: beat
+          image: "{{ .Values.beat.image.repository }}:{{ .Values.beat.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.beat.image.pullPolicy }}
+
+          command:
+            {{- toYaml .Values.beat.command | nindent 12 }}
+
+          envFrom:
+            - configMapRef:
+                name: {{ include "eli-maor.fullname" . }}-config
+            - secretRef:
+                {{- if .Values.secrets.create }}
+                name: {{ include "eli-maor.fullname" . }}-secrets
+                {{- else }}
+                name: {{ .Values.secrets.externalSecretName }}
+                {{- end }}
+
+          env:
+            - name: DATABASE_URL
+              value: {{ include "eli-maor.databaseUrl" . | quote }}
+            - name: REDIS_URL
+              value: {{ include "eli-maor.redisUrl" . | quote }}
+
+          resources:
+            {{- toYaml .Values.beat.resources | nindent 12 }}
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -f /tmp/celerybeat.pid && kill -0 $(cat /tmp/celerybeat.pid)
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+{{- end }}

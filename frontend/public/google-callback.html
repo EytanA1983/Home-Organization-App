@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>חיבור Google Calendar</title>
+</head>
+<body>
+  <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+    <h2>מתחבר ל-Google Calendar...</h2>
+    <p>אנא המתן...</p>
+  </div>
+  <script>
+    // בדיקה אם יש שגיאה או הצלחה ב-URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const error = urlParams.get('error');
+
+    if (error) {
+      // שליחת הודעת שגיאה לחלון הראשי
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'google-auth-callback',
+          success: false,
+          error: error
+        }, window.location.origin);
+      }
+      window.close();
+    } else if (code) {
+      // שליחת קוד לחלון הראשי (או אפשר לשלוח ישירות ל-backend)
+      // כאן נשלח הודעה שהקוד התקבל, והחלון הראשי יטפל בזה
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'google-auth-callback',
+          success: true,
+          code: code
+        }, window.location.origin);
+      }
+      // סגירת החלון אחרי 1 שנייה
+      setTimeout(() => {
+        window.close();
+      }, 1000);
+    } else {
+      // אם אין קוד או שגיאה, נשלח הודעה שהתהליך הושלם
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'google-auth-callback',
+          success: true
+        }, window.location.origin);
+      }
+      setTimeout(() => {
+        window.close();
+      }, 1000);
+    }
+  </script>
+</body>
+</html>

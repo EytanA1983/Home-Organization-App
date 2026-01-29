@@ -1,0 +1,36 @@
+# ML Service .gitignore
+
+# Model files (too large for git)
+models/
+*.pth
+*.pt
+*.h5
+*.pb
+*.onnx
+*.ckpt
+
+# Cache
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

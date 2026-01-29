@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="250" fill="#FAF3E0"/>
+  
+  <!-- House Base -->
+  <path d="M128 512V224L256 96L384 224V512H128Z" fill="#AEDFF7" stroke="#7BC4E8" stroke-width="8"/>
+  
+  <!-- Roof -->
+  <path d="M64 224L256 32L448 224L256 160L64 224Z" fill="#D4A574" stroke="#B8956A" stroke-width="6"/>
+  
+  <!-- Door -->
+  <rect x="216" y="352" width="80" height="160" rx="8" fill="#B8956A" stroke="#8B6914" stroke-width="4"/>
+  
+  <!-- Door Handle -->
+  <circle cx="276" cy="432" r="10" fill="#8B6914"/>
+  
+  <!-- Windows -->
+  <rect x="152" y="272" width="64" height="64" rx="4" fill="#87CEEB" stroke="#5A9CC8" stroke-width="4"/>
+  <rect x="296" y="272" width="64" height="64" rx="4" fill="#87CEEB" stroke="#5A9CC8" stroke-width="4"/>
+  
+  <!-- Window Dividers -->
+  <line x1="184" y1="272" x2="184" y2="336" stroke="#5A9CC8" stroke-width="3"/>
+  <line x1="152" y1="304" x2="216" y2="304" stroke="#5A9CC8" stroke-width="3"/>
+  <line x1="328" y1="272" x2="328" y2="336" stroke="#5A9CC8" stroke-width="3"/>
+  <line x1="296" y1="304" x2="360" y2="304" stroke="#5A9CC8" stroke-width="3"/>
+  
+  <!-- Chimney -->
+  <rect x="336" y="80" width="40" height="96" fill="#B8956A" stroke="#8B6914" stroke-width="4"/>
+  
+  <!-- Checkmark Badge -->
+  <circle cx="400" cy="400" r="80" fill="#10B981"/>
+  <path d="M360 400L385 425L440 370" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

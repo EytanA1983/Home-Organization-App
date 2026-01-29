@@ -1,0 +1,28 @@
+# Snyk Configuration
+# https://docs.snyk.io/features/snyk-cli/configure-the-snyk-cli
+
+# Exclude specific vulnerabilities (use with caution)
+# Example:
+# exclude:
+#   SNYK-PYTHON-REQUESTS-1069465:
+#     - 'requests > 2.0.0':
+#         reason: False positive
+#         expires: '2024-12-31'
+
+# Ignore specific paths
+ignore: {}
+
+# Policy file location
+policy: '.snyk'
+
+# Severity threshold (low, medium, high, critical)
+severity-threshold: high
+
+# Fail on issues
+fail-on: all
+
+# Organization (set via SNYK_ORG env var or CLI)
+# org: your-org-name
+
+# Project name
+# project-name: eli-maor-home-org

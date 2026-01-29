@@ -1,0 +1,188 @@
+# Application Alerts for Prometheus
+# https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
+
+groups:
+  # ==================== Application Health ====================
+  - name: application
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(app_http_errors_total[5m])) by (endpoint)
+          / sum(rate(app_http_requests_total[5m])) by (endpoint)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.endpoint }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on endpoint {{ $labels.endpoint }}"
+
+      # Critical error rate
+      - alert: CriticalErrorRate
+        expr: |
+          sum(rate(app_http_errors_total[5m])) by (endpoint)
+          / sum(rate(app_http_requests_total[5m])) by (endpoint)
+          > 0.15
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate on {{ $labels.endpoint }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on endpoint {{ $labels.endpoint }}"
+
+      # High latency
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(app_http_request_duration_seconds_bucket[5m])) by (le, endpoint))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency on {{ $labels.endpoint }}"
+          description: "95th percentile latency is {{ $value | humanizeDuration }} on endpoint {{ $labels.endpoint }}"
+
+      # Application down
+      - alert: ApplicationDown
+        expr: up{job="eli-maor-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application is down"
+          description: "The backend application has been down for more than 1 minute"
+
+  # ==================== Database ====================
+  - name: database
+    rules:
+      # Slow database queries
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, sum(rate(app_database_query_duration_seconds_bucket[5m])) by (le, operation))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile database query duration is {{ $value | humanizeDuration }} for {{ $labels.operation }}"
+
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance is not responding"
+
+      # High PostgreSQL connections
+      - alert: HighPostgreSQLConnections
+        expr: |
+          pg_stat_activity_count{state="active"}
+          / pg_settings_max_connections
+          > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL connection usage"
+          description: "PostgreSQL connection usage is at {{ $value | humanizePercentage }}"
+
+  # ==================== Redis ====================
+  - name: redis
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance is not responding"
+
+      # High Redis memory
+      - alert: HighRedisMemory
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is at {{ $value | humanizePercentage }}"
+
+      # Redis connection issues
+      - alert: RedisConnectionIssues
+        expr: redis_rejected_connections_total > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis rejecting connections"
+          description: "Redis has rejected {{ $value }} connections"
+
+  # ==================== Celery ====================
+  - name: celery
+    rules:
+      # Celery task failures
+      - alert: CeleryTaskFailures
+        expr: |
+          sum(rate(app_celery_tasks_total{status="failure"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "Celery task failure rate is {{ $value }} per second"
+
+      # Long running tasks
+      - alert: LongRunningCeleryTasks
+        expr: |
+          histogram_quantile(0.95, sum(rate(app_celery_task_duration_seconds_bucket[5m])) by (le, task_name))
+          > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long running Celery tasks"
+          description: "95th percentile task duration is {{ $value | humanizeDuration }} for {{ $labels.task_name }}"
+
+  # ==================== Infrastructure ====================
+  - name: infrastructure
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}%"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}%"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is at {{ $value | printf \"%.1f\" }}% available"

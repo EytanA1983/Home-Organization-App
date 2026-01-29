@@ -1,0 +1,82 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eli-maor.fullname" . }}-worker
+  labels:
+    {{- include "eli-maor.worker.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/change-cause: "Helm release {{ .Release.Revision }}"
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  revisionHistoryLimit: {{ .Values.worker.revisionHistoryLimit | default 10 }}
+
+  strategy:
+    {{- toYaml .Values.worker.strategy | nindent 4 }}
+
+  selector:
+    matchLabels:
+      {{- include "eli-maor.worker.selectorLabels" . | nindent 6 }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "eli-maor.worker.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "eli-maor.configChecksum" . }}
+        checksum/secret: {{ include "eli-maor.secretChecksum" . }}
+    spec:
+      serviceAccountName: {{ include "eli-maor.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 120
+
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+
+          command:
+            {{- toYaml .Values.worker.command | nindent 12 }}
+
+          envFrom:
+            - configMapRef:
+                name: {{ include "eli-maor.fullname" . }}-config
+            - secretRef:
+                {{- if .Values.secrets.create }}
+                name: {{ include "eli-maor.fullname" . }}-secrets
+                {{- else }}
+                name: {{ .Values.secrets.externalSecretName }}
+                {{- end }}
+
+          env:
+            - name: DATABASE_URL
+              value: {{ include "eli-maor.databaseUrl" . | quote }}
+            - name: REDIS_URL
+              value: {{ include "eli-maor.redisUrl" . | quote }}
+
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - celery -A app.workers.celery_app.celery inspect ping -d celery@$HOSTNAME
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "celery -A app.workers.celery_app.celery control cancel_consumer -d celery@$HOSTNAME && sleep 30"
+{{- end }}

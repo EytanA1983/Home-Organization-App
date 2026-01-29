@@ -1,0 +1,50 @@
+# Helm Chart for Eli Maor Application
+# https://helm.sh/docs/topics/charts/
+
+apiVersion: v2
+name: eli-maor
+description: Home organization application with tasks, rooms, and notifications
+
+# Chart type: application or library
+type: application
+
+# Chart version (increment for chart changes)
+version: 1.0.0
+
+# Application version (increment for app changes)
+appVersion: "1.0.0"
+
+# Minimum Helm version
+kubeVersion: ">=1.23.0-0"
+
+# Keywords for searching
+keywords:
+  - home-organization
+  - task-management
+  - fastapi
+  - react
+
+# Chart maintainers
+maintainers:
+  - name: Eli Maor
+    email: eli@example.com
+
+# Chart sources
+sources:
+  - https://github.com/eli-maor/home-org
+
+# Dependencies
+dependencies:
+  - name: postgresql
+    version: "13.2.24"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+
+  - name: redis
+    version: "18.6.1"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+
+# Annotations
+annotations:
+  category: Productivity

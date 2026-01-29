@@ -1,0 +1,149 @@
+# Docker Compose for Load Testing
+#
+# Usage:
+#   docker compose -f docker-compose.loadtest.yml up locust
+#   docker compose -f docker-compose.loadtest.yml run k6
+
+version: "3.9"
+
+services:
+  # ==================== Locust ====================
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: eli_maor_locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: >
+      -f /mnt/locust/locustfile.py
+      --host=http://host.docker.internal:8000
+      --web-host=0.0.0.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - LOCUST_USERS=100
+      - LOCUST_SPAWN_RATE=10
+    networks:
+      - loadtest-network
+
+  # Locust Master (for distributed testing)
+  locust-master:
+    image: locustio/locust:2.20.0
+    container_name: eli_maor_locust_master
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: >
+      -f /mnt/locust/locustfile.py
+      --master
+      --host=http://host.docker.internal:8000
+      --web-host=0.0.0.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - loadtest-network
+    profiles:
+      - distributed
+
+  # Locust Worker
+  locust-worker:
+    image: locustio/locust:2.20.0
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: >
+      -f /mnt/locust/locustfile.py
+      --worker
+      --master-host=locust-master
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - locust-master
+    networks:
+      - loadtest-network
+    deploy:
+      replicas: 4
+    profiles:
+      - distributed
+
+  # ==================== k6 ====================
+  k6:
+    image: grafana/k6:0.48.0
+    container_name: eli_maor_k6
+    volumes:
+      - ./k6-script.js:/scripts/k6-script.js
+      - ./results:/results
+    command: run /scripts/k6-script.js
+    environment:
+      - BASE_URL=http://host.docker.internal:8000
+      - K6_OUT=json=/results/results.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - loadtest-network
+
+  # k6 with InfluxDB output
+  k6-influx:
+    image: grafana/k6:0.48.0
+    container_name: eli_maor_k6_influx
+    volumes:
+      - ./k6-script.js:/scripts/k6-script.js
+    command: >
+      run
+      --out influxdb=http://influxdb:8086/k6
+      /scripts/k6-script.js
+    environment:
+      - BASE_URL=http://host.docker.internal:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - influxdb
+    networks:
+      - loadtest-network
+    profiles:
+      - monitoring
+
+  # ==================== InfluxDB (for k6 metrics) ====================
+  influxdb:
+    image: influxdb:1.8
+    container_name: eli_maor_influxdb_loadtest
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=k6
+      - INFLUXDB_HTTP_AUTH_ENABLED=false
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    networks:
+      - loadtest-network
+    profiles:
+      - monitoring
+
+  # ==================== Grafana (for visualizing results) ====================
+  grafana-loadtest:
+    image: grafana/grafana:10.2.0
+    container_name: eli_maor_grafana_loadtest
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - grafana_loadtest_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
+    networks:
+      - loadtest-network
+    profiles:
+      - monitoring
+
+networks:
+  loadtest-network:
+    driver: bridge
+
+volumes:
+  influxdb_data:
+  grafana_loadtest_data:

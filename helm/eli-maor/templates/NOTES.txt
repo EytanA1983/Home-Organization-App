@@ -1,0 +1,61 @@
+🏠 Eli Maor - Home Organization App
+====================================
+
+Release: {{ .Release.Name }}
+Revision: {{ .Release.Revision }}
+Namespace: {{ .Release.Namespace }}
+
+{{ if .Values.backend.enabled }}
+📡 Backend API:
+  - Internal: http://{{ include "eli-maor.fullname" . }}-backend:{{ .Values.backend.service.port }}
+  {{- if .Values.ingress.enabled }}
+  - External: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}/api
+  {{- end }}
+{{ end }}
+
+{{ if .Values.frontend.enabled }}
+🖥️  Frontend:
+  - Internal: http://{{ include "eli-maor.fullname" . }}-frontend:{{ .Values.frontend.service.port }}
+  {{- if .Values.ingress.enabled }}
+  - External: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}
+  {{- end }}
+{{ end }}
+
+🔄 Rollback Commands:
+======================
+
+# View deployment history
+kubectl rollout history deployment/{{ include "eli-maor.fullname" . }}-backend -n {{ .Release.Namespace }}
+
+# Rollback to previous version
+kubectl rollout undo deployment/{{ include "eli-maor.fullname" . }}-backend -n {{ .Release.Namespace }}
+
+# Rollback to specific revision
+kubectl rollout undo deployment/{{ include "eli-maor.fullname" . }}-backend --to-revision=N -n {{ .Release.Namespace }}
+
+# Helm rollback
+helm rollback {{ .Release.Name }} N -n {{ .Release.Namespace }}
+
+# View Helm history
+helm history {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+📊 Monitoring:
+==============
+
+# Check deployment status
+kubectl rollout status deployment/{{ include "eli-maor.fullname" . }}-backend -n {{ .Release.Namespace }}
+
+# View pods
+kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }}
+
+# View logs
+kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=backend -n {{ .Release.Namespace }}
+
+🚀 Upgrade:
+===========
+
+# Upgrade with new values
+helm upgrade {{ .Release.Name }} ./helm/eli-maor -n {{ .Release.Namespace }} -f values-production.yaml
+
+# Upgrade with new image
+helm upgrade {{ .Release.Name }} ./helm/eli-maor -n {{ .Release.Namespace }} --set backend.image.tag=v2.0.0

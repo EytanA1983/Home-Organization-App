@@ -1,0 +1,301 @@
+/**
+ * Tailwind @apply rules (GLOBAL)
+ *
+ * Requirement:
+ * - Use @apply only in *.module.css files (when needed).
+ *
+ * Implementation detail:
+ * - We keep existing global class APIs (e.g. .btn, .card, .input) by using :global(...)
+ *   so we don't need to refactor JSX everywhere.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Base HTML styles */
+  :global(html) {
+    @apply scroll-smooth;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :global(html),
+  :global(body),
+  :global(#root) {
+    @apply min-h-full;
+  }
+
+  :global(body) {
+    @apply bg-cream text-gray-800 font-sans;
+    @apply dark:bg-dark-bg dark:text-dark-text;
+  }
+
+  :global(#root) {
+    @apply min-h-screen flex flex-col;
+  }
+
+  /* Focus styles for accessibility */
+  :global(:focus-visible) {
+    @apply outline-2 outline-offset-2 outline-sky;
+  }
+
+  /* Selection color */
+  :global(::selection) {
+    @apply bg-sky/30 text-gray-900;
+  }
+
+  :global(.dark) ::selection {
+    @apply bg-sky/50 text-white;
+  }
+
+  /* Global scrollbar styling */
+  :global(*::-webkit-scrollbar) {
+    @apply w-2 h-2;
+  }
+
+  :global(*::-webkit-scrollbar-track) {
+    @apply bg-transparent;
+  }
+
+  :global(*::-webkit-scrollbar-thumb) {
+    @apply bg-gray-400/50 rounded;
+  }
+
+  :global(*::-webkit-scrollbar-thumb:hover) {
+    @apply bg-gray-400/70;
+  }
+
+  /* Dark mode scrollbars */
+  :global(.dark) *::-webkit-scrollbar-thumb {
+    @apply bg-gray-600/50;
+  }
+
+  :global(.dark) *::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600/70;
+  }
+}
+
+@layer components {
+  /* Buttons */
+  :global(.btn) {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply transition-all duration-200;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  :global(.btn-primary) {
+    @apply btn bg-sky text-white;
+    @apply hover:bg-sky/90 active:bg-sky/80;
+    @apply focus-visible:ring-sky;
+  }
+
+  :global(.btn-secondary) {
+    @apply btn bg-gray-200 text-gray-800;
+    @apply hover:bg-gray-300 active:bg-gray-400;
+    @apply dark:bg-dark-surface dark:text-dark-text;
+    @apply dark:hover:bg-dark-border;
+    @apply focus-visible:ring-gray-400;
+  }
+
+  :global(.btn-danger) {
+    @apply btn bg-red-500 text-white;
+    @apply hover:bg-red-600 active:bg-red-700;
+    @apply focus-visible:ring-red-500;
+  }
+
+  :global(.btn-success) {
+    @apply btn bg-emerald-500 text-white;
+    @apply hover:bg-emerald-600 active:bg-emerald-700;
+    @apply focus-visible:ring-emerald-500;
+  }
+
+  :global(.btn-ghost) {
+    @apply btn bg-transparent text-gray-700;
+    @apply hover:bg-gray-100 active:bg-gray-200;
+    @apply dark:text-dark-text dark:hover:bg-dark-surface;
+    @apply focus-visible:ring-gray-400;
+  }
+
+  :global(.btn-icon) {
+    @apply btn p-2 aspect-square;
+  }
+
+  /* Cards */
+  :global(.card) {
+    @apply bg-white rounded-xl shadow-card;
+    @apply dark:bg-dark-surface dark:shadow-none dark:border dark:border-dark-border;
+  }
+
+  :global(.card-hover) {
+    @apply card transition-all duration-200;
+    @apply hover:shadow-elevated hover:-translate-y-0.5;
+    @apply dark:hover:border-dark-accent;
+  }
+
+  /* Form inputs */
+  :global(.input) {
+    @apply w-full px-4 py-2 rounded-lg border border-gray-300;
+    @apply bg-white text-gray-900;
+    @apply focus:outline-none focus:ring-2 focus:ring-sky focus:border-transparent;
+    @apply dark:bg-dark-surface dark:text-dark-text dark:border-dark-border;
+    @apply dark:focus:ring-dark-accent;
+    @apply placeholder:text-gray-400 dark:placeholder:text-gray-300;
+  }
+
+  :global(.input-error) {
+    @apply input border-red-500 focus:ring-red-500;
+  }
+
+  /* Labels */
+  :global(.label) {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply dark:text-dark-text;
+  }
+
+  /* Badges */
+  :global(.badge) {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  :global(.badge-success) {
+    @apply badge bg-emerald-100 text-emerald-800;
+    @apply dark:bg-emerald-900/30 dark:text-emerald-400;
+  }
+
+  :global(.badge-warning) {
+    @apply badge bg-amber-100 text-amber-800;
+    @apply dark:bg-amber-900/30 dark:text-amber-400;
+  }
+
+  :global(.badge-error) {
+    @apply badge bg-red-100 text-red-800;
+    @apply dark:bg-red-900/30 dark:text-red-400;
+  }
+
+  :global(.badge-info) {
+    @apply badge bg-sky/20 text-sky;
+    @apply dark:bg-sky/30 dark:text-sky;
+  }
+
+  /* Emoji display optimization */
+  :global(.emoji) {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+    @apply inline-block text-[1.2em] leading-none align-middle;
+    font-style: normal;
+    font-weight: normal;
+  }
+
+  :global(button) :global(.emoji),
+  :global(a) :global(.emoji) {
+    @apply text-[1.3em];
+  }
+
+  /* Loading spinner */
+  :global(.spinner) {
+    @apply animate-spin rounded-full border-2 border-gray-300 border-t-sky;
+  }
+
+  /* Skeleton loading */
+  :global(.skeleton) {
+    @apply animate-pulse bg-gray-200 rounded;
+    @apply dark:bg-dark-border;
+  }
+}
+
+@layer utilities {
+  /* Room background images (SVG placeholders; replace with real JPGs if desired) */
+  :global(.bg-room-bathroom) {
+    background-image: url('/bathroom-background.svg');
+    @apply bg-cover bg-center opacity-30;
+  }
+
+  :global(.bg-room-bedroom) {
+    background-image: url('/bedroom-background.svg');
+    @apply bg-cover bg-center opacity-30;
+  }
+
+  /* Dark-mode overrides */
+  :global(.dark .bg-room-bathroom),
+  :global(.dark .bg-room-bedroom) {
+    @apply opacity-40;
+  }
+
+  /* Thin scrollbar */
+  :global(.scrollbar-thin)::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  /* Glass effect */
+  :global(.glass) {
+    @apply bg-white/80 backdrop-blur-sm;
+    @apply dark:bg-dark-surface/80;
+  }
+
+  /* Gradient text */
+  :global(.text-gradient) {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-sky to-mint;
+  }
+
+  /* Focus visible ring - consistent focus indicator */
+  :global(.focus-ring) {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-2;
+  }
+
+  :global(.focus-ring-inset) {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-inset;
+  }
+
+  /* High contrast focus for dark backgrounds */
+  :global(.focus-ring-light) {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900;
+  }
+
+  /* Skip link styles */
+  :global(.skip-link) {
+    @apply sr-only;
+    @apply focus:not-sr-only focus:fixed focus:top-4 focus:right-4 focus:z-[100];
+    @apply focus:px-4 focus:py-2 focus:bg-sky focus:text-white focus:rounded-lg;
+    @apply focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white;
+  }
+
+  /* Color contrast helpers */
+  :global(.text-high-contrast) {
+    @apply text-gray-900 dark:text-white;
+  }
+
+  :global(.bg-high-contrast) {
+    @apply bg-white dark:bg-gray-900;
+  }
+
+  /* Keyboard focus indicator */
+  :global(.keyboard-focus:focus) {
+    @apply outline-none;
+  }
+
+  :global(.keyboard-focus:focus-visible) {
+    @apply ring-2 ring-sky ring-offset-2;
+  }
+
+  /* Error / Success / Warning state styling */
+  :global(.error-state) {
+    @apply border-red-500 text-red-600;
+    @apply dark:border-red-400 dark:text-red-400;
+  }
+
+  :global(.success-state) {
+    @apply border-emerald-500 text-emerald-600;
+    @apply dark:border-emerald-400 dark:text-emerald-400;
+  }
+
+  :global(.warning-state) {
+    @apply border-amber-500 text-amber-600;
+    @apply dark:border-amber-400 dark:text-amber-400;
+  }
+}
+
