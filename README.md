@@ -2,7 +2,7 @@
 
 > **סידור וארגון הבית** - אפליקציה מתקדמת לניהול משימות בית עם הכרת קול, תזמון חכם ותמיכה מלאה בעברית
 
-[![GitHub](https://img.shields.io/badge/GitHub-EytanA1983-blue?logo=github)](https://github.com/EytanA1983/my-jb-exercise)
+[![GitHub](https://img.shields.io/badge/GitHub-EytanA1983-blue?logo=github)](https://github.com/EytanA1983/Home-Organization-App)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python)](https://python.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org)
