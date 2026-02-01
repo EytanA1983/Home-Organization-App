@@ -1,47 +1,88 @@
-# Start App - Frontend and Backend
-$ErrorActionPreference = "Continue"
+# Simple script to start both servers and open browser
+# Run from project root
+
+Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║  🚀 Starting Home Organization App                        ║" -ForegroundColor Cyan
+Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host ""
 
 $projectRoot = $PSScriptRoot
-if (-not $projectRoot) {
-    $projectRoot = Get-Location
+$backendPath = Join-Path $projectRoot "backend"
+$frontendPath = Join-Path $projectRoot "frontend"
+
+# Check if paths exist
+if (-not (Test-Path $backendPath)) {
+    Write-Host "❌ Backend directory not found: $backendPath" -ForegroundColor Red
+    exit 1
 }
 
-Write-Host "=== Starting App ===" -ForegroundColor Green
-Write-Host "Project root: $projectRoot" -ForegroundColor Gray
+if (-not (Test-Path $frontendPath)) {
+    Write-Host "❌ Frontend directory not found: $frontendPath" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "📁 Project root: $projectRoot" -ForegroundColor Gray
+Write-Host ""
 
 # Start Backend
-Write-Host "`nStarting Backend..." -ForegroundColor Cyan
-$backendPath = Join-Path $projectRoot "backend"
-if (Test-Path $backendPath) {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
-    Write-Host "Backend starting on http://localhost:8000" -ForegroundColor Green
-} else {
-    Write-Host "Backend directory not found!" -ForegroundColor Red
-}
+Write-Host "🔧 [1/2] Starting Backend Server..." -ForegroundColor Yellow
+Write-Host "   Path: $backendPath" -ForegroundColor Gray
 
-# Wait a bit
-Start-Sleep -Seconds 2
+Start-Process powershell -ArgumentList @(
+    "-NoExit",
+    "-Command",
+    "Set-Location '$backendPath'; Write-Host '╔═══════════════════════════════════════╗' -ForegroundColor Green; Write-Host '║  🐍 Backend Server (FastAPI)          ║' -ForegroundColor Green; Write-Host '╚═══════════════════════════════════════╝' -ForegroundColor Green; Write-Host ''; if (-not (Test-Path .env)) { Write-Host '⚠️  Creating .env file...' -ForegroundColor Yellow; 'SECRET_KEY=dev-secret-key-change-in-production' | Out-File -FilePath .env -Encoding utf8 }; Write-Host '🚀 Starting on http://127.0.0.1:8000' -ForegroundColor Cyan; Write-Host '📚 API Docs: http://127.0.0.1:8000/docs' -ForegroundColor Cyan; Write-Host ''; python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+)
+
+Write-Host "   ✅ Backend terminal opened" -ForegroundColor Green
+Write-Host "   ⏳ Waiting 5 seconds for backend to start..." -ForegroundColor Gray
+Start-Sleep -Seconds 5
 
 # Start Frontend
-Write-Host "`nStarting Frontend..." -ForegroundColor Cyan
-$frontendPath = Join-Path $projectRoot "frontend"
-if (Test-Path $frontendPath) {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; npm run dev"
-    Write-Host "Frontend starting on http://localhost:5178 (development)" -ForegroundColor Green
-} else {
-    Write-Host "Frontend directory not found!" -ForegroundColor Red
-}
+Write-Host ""
+Write-Host "⚛️  [2/2] Starting Frontend Server..." -ForegroundColor Yellow
+Write-Host "   Path: $frontendPath" -ForegroundColor Gray
 
-# Wait for servers to start
-Write-Host "`nWaiting for servers to start..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList @(
+    "-NoExit",
+    "-Command",
+    "Set-Location '$frontendPath'; Write-Host '╔═══════════════════════════════════════╗' -ForegroundColor Green; Write-Host '║  ⚛️  Frontend Server (Vite + React)  ║' -ForegroundColor Green; Write-Host '╚═══════════════════════════════════════╝' -ForegroundColor Green; Write-Host ''; Write-Host '🚀 Starting on http://localhost:5178' -ForegroundColor Cyan; Write-Host ''; npm run dev"
+)
+
+Write-Host "   ✅ Frontend terminal opened" -ForegroundColor Green
+Write-Host "   ⏳ Waiting 8 seconds for frontend to start..." -ForegroundColor Gray
 Start-Sleep -Seconds 8
 
-# Open browser
-Write-Host "`nOpening browser..." -ForegroundColor Cyan
+# Open browsers
+Write-Host ""
+Write-Host "🌐 Opening browsers..." -ForegroundColor Cyan
+
+Write-Host "   → Frontend: http://localhost:5178" -ForegroundColor Gray
 Start-Process "http://localhost:5178"
 
-Write-Host "`n=== Done ===" -ForegroundColor Green
-Write-Host "Frontend (Development): http://localhost:5178" -ForegroundColor Cyan
-Write-Host "Frontend (Production/Docker): http://localhost:3000" -ForegroundColor Gray
-Write-Host "Backend: http://localhost:8000" -ForegroundColor Cyan
-Write-Host "API Docs: http://localhost:8000/docs" -ForegroundColor Cyan
+Start-Sleep -Seconds 2
+
+Write-Host "   → API Docs: http://localhost:8000/docs" -ForegroundColor Gray
+Start-Process "http://localhost:8000/docs"
+
+# Summary
+Write-Host ""
+Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host "║  ✅ Servers Started Successfully!                         ║" -ForegroundColor Green
+Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host ""
+Write-Host "🔗 URLs:" -ForegroundColor Cyan
+Write-Host "   • Frontend:  http://localhost:5178" -ForegroundColor White
+Write-Host "   • Backend:   http://localhost:8000" -ForegroundColor White
+Write-Host "   • API Docs:  http://localhost:8000/docs" -ForegroundColor White
+Write-Host ""
+Write-Host "📝 Notes:" -ForegroundColor Yellow
+Write-Host "   • Both servers are running in separate terminals" -ForegroundColor Gray
+Write-Host "   • Press Ctrl+C in each terminal to stop servers" -ForegroundColor Gray
+Write-Host "   • Backend logs: backend/logs/" -ForegroundColor Gray
+Write-Host "   • Check console for any errors" -ForegroundColor Gray
+Write-Host ""
+Write-Host "💡 Tip: Keep this window open to see server status" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Press any key to close this window..." -ForegroundColor Gray
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

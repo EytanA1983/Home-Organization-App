@@ -12,7 +12,7 @@ cd /d "%~dp0"
 echo 📁 Project directory: %CD%
 echo.
 
-echo 🎯 Target: https://github.com/EytanA1983/my-jb-exercise
+echo 🎯 Target: https://github.com/EytanA1983/Home-Organization-App
 echo.
 
 echo ═══════════════════════════════════════════════════════════
@@ -35,7 +35,7 @@ echo ═════════════════════════
 echo.
 
 git remote remove origin 2>nul
-git remote add origin https://github.com/EytanA1983/my-jb-exercise.git
+git remote add origin https://github.com/EytanA1983/Home-Organization-App.git
 echo ✅ Remote configured
 echo.
 
@@ -85,15 +85,15 @@ if %ERRORLEVEL% EQU 0 (
     echo ║  ✅ Successfully Uploaded to GitHub!                      ║
     echo ╚════════════════════════════════════════════════════════════╝
     echo.
-    echo 🔗 Repository: https://github.com/EytanA1983/my-jb-exercise
+    echo 🔗 Repository: https://github.com/EytanA1983/Home-Organization-App
     echo.
     echo 📝 Next steps:
-    echo    1. Visit: https://github.com/EytanA1983/my-jb-exercise
+    echo    1. Visit: https://github.com/EytanA1983/Home-Organization-App
     echo    2. Review the uploaded files
     echo    3. Delete old exercise folders if needed
     echo    4. Update repository settings and description
     echo.
-    start https://github.com/EytanA1983/my-jb-exercise
+    start https://github.com/EytanA1983/Home-Organization-App
 ) else (
     echo.
     echo ❌ Upload failed!
