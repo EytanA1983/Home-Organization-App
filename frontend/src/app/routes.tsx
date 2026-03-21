@@ -7,7 +7,9 @@ import Login from "../pages/Login";
 import RegisterPage from "../pages/RegisterPage";
 import { GoogleLoginRedirect } from "../pages/GoogleLoginRedirect";
 import Dashboard from "../pages/Dashboard";
-import { RoomsPage } from "../pages/RoomsPage";
+import { CategoriesPage } from "../pages/CategoriesPage";
+import CategoryDetailPage from "../pages/CategoryDetailPage";
+import { LegacyRoomDetailGate, LegacyRoomsListRedirect } from "../pages/LegacyRoomRedirects";
 import HousePage from "../pages/HousePage";
 import AllTasksPage from "../pages/AllTasksPage";
 import { AddTaskPage } from "../pages/AddTaskPage";
@@ -15,7 +17,6 @@ import ShoppingListsPage from "../pages/ShoppingListsPage";
 import ShoppingListCreatePage from "../pages/ShoppingListCreatePage";
 import ShoppingListDetailPage from "../pages/ShoppingListDetailPage";
 import CalendarPage from "../pages/CalendarPage";
-import RoomPage from "../pages/RoomPage";
 import InventoryPage from "../pages/InventoryPage";
 import EmotionalJournalPage from "../pages/EmotionalJournalPage";
 import ContentHubPage from "../pages/ContentHubPage";
@@ -145,10 +146,26 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: `${ROUTES.CATEGORIES}/:categoryKey`,
+        element: (
+          <ErrorBoundary>
+            <CategoryDetailPage />
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: ROUTES.CATEGORIES,
+        element: (
+          <ErrorBoundary>
+            <CategoriesPage />
+          </ErrorBoundary>
+        ),
+      },
+      {
         path: `${ROUTES.ROOMS}/:roomId`,
         element: (
           <ErrorBoundary>
-            <RoomPage />
+            <LegacyRoomDetailGate />
           </ErrorBoundary>
         ),
       },
@@ -156,7 +173,7 @@ export const router = createBrowserRouter([
         path: ROUTES.ROOMS,
         element: (
           <ErrorBoundary>
-            <RoomsPage />
+            <LegacyRoomsListRedirect />
           </ErrorBoundary>
         ),
       },

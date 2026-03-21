@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../api";
 import { showError } from "../utils/toast";
 import { useTranslation } from "react-i18next";
 import type { AxiosError } from "axios";
+import { ROUTES, getCategoryRoute } from "../utils/routes";
+import { isRtlLang } from "../utils/localeDirection";
 
 type VideoItem = {
   title: string;
@@ -37,37 +40,15 @@ const ROOM_OPTIONS = [
   { key: "bathroom", he: "אמבטיה", en: "Bathroom" },
 ];
 
-export default function ContentHubPage() {
-  const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const t = isEnglish
-    ? {
-        title: "Content Hub",
-        subtitle: "Smart content by room, category, difficulty and time.",
-        room: "Room",
-        category: "Category",
-        difficulty: "Difficulty",
-        maxTime: "Max Time (minutes)",
-        all: "All",
-        loading: "Loading...",
-        empty: "No videos found for this filter. Try a broader selection.",
-        watch: "Watch",
-        loadFail: "Failed to load content hub",
-      }
-    : {
-        title: "ספריית תוכן",
-        subtitle: "תוכן חכם לפי חדר, קטגוריה, רמת קושי וזמן.",
-        room: "חדר",
-        category: "קטגוריה",
-        difficulty: "רמת קושי",
-        maxTime: "זמן מקסימלי (בדקות)",
-        all: "הכול",
-        loading: "טוען...",
-        empty: "לא נמצאו סרטונים לסינון הזה. נסי בחירה רחבה יותר.",
-        watch: "לצפייה",
-        loadFail: "טעינת ספריית התוכן נכשלה",
-      };
+const TS = (prefix: string) => (k: string) => `${prefix}.${k}`;
 
+export default function ContentHubPage() {
+  const { i18n, t: tPc } = useTranslation("productCategories");
+  const rtl = isRtlLang(i18n.language);
+  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
+  const ct = TS("contentSupport");
+
+  const [searchParams] = useSearchParams();
   const [room, setRoom] = useState("kitchen");
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
@@ -79,6 +60,13 @@ export default function ContentHubPage() {
     const found = ROOM_OPTIONS.find((x) => x.key === room);
     return isEnglish ? found?.en : found?.he;
   }, [room, isEnglish]);
+
+  useEffect(() => {
+    const a = searchParams.get("area");
+    if (a && ROOM_OPTIONS.some((o) => o.key === a)) {
+      setRoom(a);
+    }
+  }, [searchParams]);
 
   const load = async () => {
     setLoading(true);
@@ -95,7 +83,7 @@ export default function ContentHubPage() {
       setData(res.data);
     } catch (err) {
       const axiosError = err as AxiosError<{ detail?: string }>;
-      showError(axiosError?.response?.data?.detail ?? t.loadFail);
+      showError(axiosError?.response?.data?.detail ?? tPc(ct("loadFail")));
     } finally {
       setLoading(false);
     }
@@ -103,6 +91,7 @@ export default function ContentHubPage() {
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load defined each render; deps are the filter inputs
   }, [room, category, difficulty, maxMinutes, isEnglish]);
 
   useEffect(() => {
@@ -112,16 +101,45 @@ export default function ContentHubPage() {
   }, [room]);
 
   return (
-    <main className="pageContent" style={{ display: "grid", gap: 16 }} dir={isEnglish ? "ltr" : "rtl"}>
+    <main className="pageContent" style={{ display: "grid", gap: 16 }} dir={rtl ? "rtl" : "ltr"}>
       <section className="lifestyle-card">
-        <div className="lifestyle-title">{t.title}</div>
+        <div className="lifestyle-title">{tPc(ct("pageTitle"))}</div>
         <div className="lifestyle-muted">
-          {t.subtitle} {selectedRoomLabel ? `• ${selectedRoomLabel}` : ""}
+          {tPc(ct("pageSubtitle"))}
+          {selectedRoomLabel ? ` • ${selectedRoomLabel}` : ""}
+        </div>
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Link className="wow-btn wow-btnPrimary" to={ROUTES.CATEGORIES}>
+            {tPc(ct("browseCategories"))}
+          </Link>
+        </div>
+        <div className="lifestyle-muted" style={{ marginTop: 14, fontWeight: 600 }}>
+          {tPc(ct("quickPicksLabel"))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=kitchen`}>
+            {tPc(ct("quickKitchen"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=closet`}>
+            {tPc(ct("quickCloset"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=bedroom`}>
+            {tPc(ct("quickBedroom"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=bathroom`}>
+            {tPc(ct("quickBathroom"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=living_room`}>
+            {tPc(ct("quickLiving"))}
+          </Link>
+          <Link className="wow-btn" to={getCategoryRoute("emotional")}>
+            {tPc(ct("quickEmotional"))}
+          </Link>
         </div>
       </section>
 
       <section className="lifestyle-card" style={{ display: "grid", gap: 10 }}>
-        <label className="label">{t.room}</label>
+        <label className="label">{tPc(ct("filterAreaLabel"))}</label>
         <select className="input" value={room} onChange={(e) => setRoom(e.target.value)}>
           {ROOM_OPTIONS.map((option) => (
             <option key={option.key} value={option.key}>
@@ -130,9 +148,9 @@ export default function ContentHubPage() {
           ))}
         </select>
 
-        <label className="label">{t.category}</label>
+        <label className="label">{tPc(ct("taxonomyCategory"))}</label>
         <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="">{t.all}</option>
+          <option value="">{tPc(ct("all"))}</option>
           {(data?.taxonomy.categories || []).map((c) => (
             <option key={c} value={c}>
               {c}
@@ -140,9 +158,9 @@ export default function ContentHubPage() {
           ))}
         </select>
 
-        <label className="label">{t.difficulty}</label>
+        <label className="label">{tPc(ct("difficulty"))}</label>
         <select className="input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-          <option value="">{t.all}</option>
+          <option value="">{tPc(ct("all"))}</option>
           {(data?.taxonomy.difficulty || []).map((d) => (
             <option key={d} value={d}>
               {d}
@@ -150,9 +168,9 @@ export default function ContentHubPage() {
           ))}
         </select>
 
-        <label className="label">{t.maxTime}</label>
+        <label className="label">{tPc(ct("maxTime"))}</label>
         <select className="input" value={maxMinutes} onChange={(e) => setMaxMinutes(e.target.value)}>
-          <option value="">{t.all}</option>
+          <option value="">{tPc(ct("all"))}</option>
           {(data?.taxonomy.time || []).map((m) => (
             <option key={m} value={String(m)}>
               {m}
@@ -165,7 +183,7 @@ export default function ContentHubPage() {
         {loading ? (
           <div className="wow-skeleton" style={{ height: 120 }} />
         ) : !data?.items?.length ? (
-          <div className="wow-muted">{t.empty}</div>
+          <div className="wow-muted">{tPc(ct("empty"))}</div>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             {data.items.map((item, idx) => (
@@ -180,7 +198,7 @@ export default function ContentHubPage() {
                 <div style={{ fontWeight: 700, color: "#4A2BC7" }}>{item.example}</div>
                 <div>
                   <a className="wow-btn wow-btnPrimary" href={item.video} target="_blank" rel="noreferrer">
-                    {t.watch}
+                    {tPc(ct("watch"))}
                   </a>
                 </div>
               </article>

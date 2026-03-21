@@ -1,43 +1,65 @@
 /**
- * קבועי ניתוב - כל הנתיבים של האפליקציה
- * שימוש: import { ROUTES } from '../utils/routes';
+ * App routes — single source for paths and legacy compatibility helpers.
  */
+import type { ProductCategoryKey } from "../domain/productCategories";
+import { inferProductCategoryFromRoomName } from "../domain/productCategories";
+
 export const ROUTES = {
   // Public routes
-  LOGIN: '/login',
-  REGISTER: '/register',
-  GOOGLE_CALLBACK: '/auth/google/callback',
+  LOGIN: "/login",
+  REGISTER: "/register",
+  GOOGLE_CALLBACK: "/auth/google/callback",
 
   // Protected routes
-  HOME: '/',                // מסך הבית (redirects to dashboard)
-  DASHBOARD: '/dashboard',  // דשבורד מרכזי אחרי כניסה
-  ROOMS: '/rooms',          // רשימת כל החדרים
-  ROOM: '/rooms/:id',       // פרטי חדר - משימות של החדר
-  HOUSE_VIEW: '/house',     // תצוגת בית (SVG) - בחירת חדרים
-  ALL_TASKS: '/tasks',      // כל המשימות
-  ADD_TASK: '/tasks/new',   // אפשרות להוסיף משימה
-  INVENTORY: '/inventory',
-  EMOTIONAL_JOURNAL: '/emotional-journal',
-  CONTENT_HUB: '/content-hub',
-  SETTINGS: '/settings',
-  CALENDAR: '/calendar',
-  SHOPPING_LISTS: '/shopping',
-  SHOPPING_LIST_CREATE: '/shopping/new',
+  HOME: "/", // Home hub
+  DASHBOARD: "/dashboard",
+  /** Product categories (UI successor to "rooms" list) */
+  CATEGORIES: "/categories",
+  CATEGORY: "/categories/:categoryKey",
+  /**
+   * Legacy storage areas (DB `rooms`). Kept for deep links + unmapped names.
+   * List path redirects to `CATEGORIES`; detail may redirect when mappable.
+   */
+  ROOMS: "/rooms",
+  ROOM: "/rooms/:roomId",
+  HOUSE_VIEW: "/house",
+  ALL_TASKS: "/tasks",
+  ADD_TASK: "/tasks/new",
+  INVENTORY: "/inventory",
+  EMOTIONAL_JOURNAL: "/emotional-journal",
+  CONTENT_HUB: "/content-hub",
+  SETTINGS: "/settings",
+  CALENDAR: "/calendar",
+  SHOPPING_LISTS: "/shopping",
+  SHOPPING_LIST_CREATE: "/shopping/new",
 } as const;
 
-/**
- * Helper function to check if a route is protected
- */
 export const isProtectedRoute = (path: string): boolean => {
-  return path !== ROUTES.LOGIN &&
-         path !== ROUTES.REGISTER &&
-         path !== ROUTES.GOOGLE_CALLBACK;
+  return (
+    path !== ROUTES.LOGIN &&
+    path !== ROUTES.REGISTER &&
+    path !== ROUTES.GOOGLE_CALLBACK
+  );
 };
 
+/** Detail URL for a canonical product category. */
+export function getCategoryRoute(categoryKey: ProductCategoryKey): string {
+  return `${ROUTES.CATEGORIES}/${categoryKey}`;
+}
+
 /**
- * Helper function to get room route
- * Uses /rooms/:roomId format
+ * Legacy helper — numeric DB room id (still used by API).
+ * Prefer `resolveAreaPath` for navigation from a known name.
  */
 export const getRoomRoute = (roomId: number | string): string => {
   return `${ROUTES.ROOMS}/${roomId}`;
 };
+
+/**
+ * Prefer category URL when the legacy name maps cleanly; otherwise keep `/rooms/:id`.
+ */
+export function resolveAreaPath(room: { id: number; name: string }): string {
+  const cat = inferProductCategoryFromRoomName(room.name);
+  if (cat) return getCategoryRoute(cat);
+  return getRoomRoute(room.id);
+}

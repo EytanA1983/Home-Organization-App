@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import TaskList from "../components/TaskList";
-import WeeklyCalendarStrip from "../components/WeeklyCalendarStrip";
+import { apiHeOrEn, isRtlLang, pickBilingual } from "../utils/localeDirection";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import BeforeAfterTimeline from "../components/BeforeAfterTimeline";
+import DashboardWeekBar from "../components/DashboardWeekBar";
+import DashboardDailyTaskCard from "../components/DashboardDailyTaskCard";
+import { filterPendingTasksForSelectedDay } from "../utils/dashboardScheduledTasks";
+import { getDashboardTaskCategoryLabel } from "../utils/dashboardRoomLabel";
+import "../styles/dashboard-daily.css";
 import { Task } from "../app/types";
-import api, { fetchMe, getDailyReset, getProgressSummary } from '../api.ts';
+import api, { fetchMe, getDailyReset, getDailyInspiration, getDailyTip, getProgressSummary } from '../api.ts';
 import { clearTokens, hasTokens } from '../utils/tokenStorage';
 import { ROUTES } from '../utils/routes';
 import { showError } from '../utils/toast';
 import { DailyFocusRead, DailyFocusCompleteIn, DailyFocusRefreshIn } from '../schemas/daily_focus';
 import type { ProgressSummaryRead } from '../schemas/progress';
+import type { DailyInspirationRead, DailyTipRead } from '../schemas/dashboard';
 
 type RecommendedVideo = {
   videoId: string | null;
@@ -22,21 +27,9 @@ type RecommendedVideo = {
 
 type DashboardRoom = {
   id: string;
-  nameHe: string;
-  nameEn: string;
+  /** Key under `rooms.room_types.*` */
+  roomTypeKey: "living" | "kitchen" | "bedroom" | "closet";
   emoji: string;
-};
-
-type RoomCoachItem = {
-  task: string;
-  tip: string;
-  example: string;
-};
-
-type RoomCoachLocalizedItem = {
-  task: { he: string; en: string };
-  tip: { he: string; en: string };
-  example: { he: string; en: string };
 };
 
 const extractYouTubeId = (url?: string | null): string | null => {
@@ -45,100 +38,6 @@ const extractYouTubeId = (url?: string | null): string | null => {
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{6,})/
   );
   return match?.[1] ?? null;
-};
-
-const ROOM_PLAYBOOK: Record<string, RoomCoachLocalizedItem[]> = {
-  kitchen: [
-    {
-      task: { he: "התחילי מהמגירה העליונה", en: "Start with the top drawer" },
-      tip: { he: "עבדי רק מגירה אחת בכל סשן", en: "Focus on just one drawer this session" },
-      example: { he: "זרקי 3 פריטים שלא השתמשת בהם שנה", en: "Discard 3 items you have not used in a year" },
-    },
-    {
-      task: { he: "סדרי את המזווה", en: "Organize the pantry" },
-      tip: { he: "קבצי לפי קטגוריות (פסטה/קטניות/שימורים)", en: "Group by category (pasta/legumes/canned food)" },
-      example: { he: "הוציאי מוצרים כפולים שלא צריך", en: "Remove duplicate products you do not need" },
-    },
-    {
-      task: { he: "בדקי תוקף במקרר", en: "Check fridge expiration dates" },
-      tip: { he: "מה שפג תוקף יוצא מיד", en: "Anything expired goes out immediately" },
-      example: { he: "זרקי 3 מוצרים ישנים מהמקרר", en: "Throw out 3 old products from the fridge" },
-    },
-  ],
-  bedroom: [
-    {
-      task: { he: "קפלי 10 חולצות", en: "Fold 10 shirts" },
-      tip: { he: "סדרי לפי צבעים כדי לשמור על רצף", en: "Sort by color to keep a simple flow" },
-      example: { he: "הוציאי בגדים שלא לבשת שנה", en: "Remove clothes you have not worn in a year" },
-    },
-    {
-      task: { he: "סדרי את שידת הלילה", en: "Organize the nightstand" },
-      tip: { he: "השאירי רק מה שאת משתמשת בו ביום-יום", en: "Keep only what you use daily" },
-      example: { he: "פני 5 פריטים מיותרים מהמגירה", en: "Clear 5 unnecessary items from the drawer" },
-    },
-    {
-      task: { he: "עשי סבב ארון קצר", en: "Do a quick closet round" },
-      tip: { he: "בחרי מדף אחד בלבד", en: "Choose only one shelf" },
-      example: { he: "תרמי 3 פריטים שכבר לא משרתים אותך", en: "Donate 3 items that no longer serve you" },
-    },
-  ],
-  "living-room": [
-    {
-      task: { he: "פני את השולחן המרכזי", en: "Clear the center table" },
-      tip: { he: "כל פריט חוזר למקום הקבוע שלו", en: "Return each item to its fixed place" },
-      example: { he: "אחסני 5 פריטים שהתפזרו בסלון", en: "Put away 5 items scattered in the living room" },
-    },
-    {
-      task: { he: "סדרי מגירת שלטונים", en: "Organize the remote-control drawer" },
-      tip: { he: "השאירי רק מה שבשימוש אמיתי", en: "Keep only what is actually in use" },
-      example: { he: "הוציאי סוללות/כבלים לא נחוצים", en: "Remove unnecessary batteries/cables" },
-    },
-    {
-      task: { he: "נקי משטח אחד", en: "Clean one surface" },
-      tip: { he: "משטח נקי מייצר תחושת שליטה מיידית", en: "A clean surface creates instant control" },
-      example: { he: "נקי מדף אחד ליד הטלוויזיה", en: "Clean one shelf near the TV" },
-    },
-  ],
-  closet: [
-    {
-      task: { he: "קפלי ערימה אחת", en: "Fold one pile" },
-      tip: { he: "אל תפתחי הכל — רק אזור אחד", en: "Do not open everything, just one area" },
-      example: { he: "העבירי 3 פריטים לשק תרומה", en: "Move 3 items to a donation bag" },
-    },
-    {
-      task: { he: "סדרי לפי קטגוריות", en: "Sort by categories" },
-      tip: { he: "חולצות בנפרד, מכנסיים בנפרד", en: "Shirts separately, pants separately" },
-      example: { he: "בחרי מדף אחד וסיימי אותו", en: "Pick one shelf and finish it" },
-    },
-    {
-      task: { he: "סינון מהיר", en: "Quick declutter" },
-      tip: { he: "כל מה שלא נלבש שנה — החוצה", en: "Anything not worn in a year goes out" },
-      example: { he: "הוציאי 5 פריטים לא רלוונטיים", en: "Remove 5 irrelevant items" },
-    },
-  ],
-  bathroom: [
-    {
-      task: { he: "סדרי מגירת תמרוקים", en: "Organize the toiletries drawer" },
-      tip: { he: "מוצרים יומיומיים קדימה", en: "Move daily products to the front" },
-      example: { he: "השליכי 3 מוצרים שפג תוקפם", en: "Discard 3 expired products" },
-    },
-    {
-      task: { he: "נקי את משטח הכיור", en: "Clean the sink surface" },
-      tip: { he: "שמרי רק את מה שבשימוש יומי", en: "Keep only daily-use items" },
-      example: { he: "העבירי פריטים מיותרים לאחסון", en: "Move extra items to storage" },
-    },
-    {
-      task: { he: "ארגני מגבות", en: "Organize towels" },
-      tip: { he: "קיפול אחיד נותן סדר מהיר לעין", en: "Uniform folding creates instant visual order" },
-      example: { he: "קפלי וסדרי 6 מגבות", en: "Fold and arrange 6 towels" },
-    },
-  ],
-};
-
-const DEFAULT_COACH: RoomCoachLocalizedItem = {
-  task: { he: "בחרי אזור קטן להתחלה", en: "Choose one small area to start" },
-  tip: { he: "5 דקות של פוקוס עדיפות על דחיינות", en: "5 focused minutes beat procrastination" },
-  example: { he: "סדרי מדף אחד וסיימי", en: "Organize one shelf and finish it" },
 };
 
 const triggerProgressRefresh = () => {
@@ -160,7 +59,7 @@ const DEMO_TASK_TITLES: Record<string, { he: string; en: string }> = {
   "11": { he: "סידור ארון", en: "Organize wardrobe" },
 };
 
-const localizeDemoTaskTitles = (inputTasks: Task[], isEnglish: boolean): Task[] => {
+const localizeDemoTaskTitles = (inputTasks: Task[], lang: string | undefined): Task[] => {
   return inputTasks.map((task) => {
     const key = String(task.id);
     const labels = DEMO_TASK_TITLES[key];
@@ -172,12 +71,12 @@ const localizeDemoTaskTitles = (inputTasks: Task[], isEnglish: boolean): Task[] 
 
     return {
       ...task,
-      title: isEnglish ? labels.en : labels.he,
+      title: pickBilingual(lang, labels),
     };
   });
 };
 
-const buildInitialDemoTasks = (isEnglish: boolean): Task[] => {
+const buildInitialDemoTasks = (lang: string | undefined): Task[] => {
   const initialTasks: Task[] = [
     {
       id: "1",
@@ -269,107 +168,25 @@ const buildInitialDemoTasks = (isEnglish: boolean): Task[] => {
     },
   ];
 
-  return localizeDemoTaskTitles(initialTasks, isEnglish);
+  return localizeDemoTaskTitles(initialTasks, lang);
 };
 
 export default function Dashboard() {
-  const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const text = isEnglish
-    ? {
-        loading: "Loading...",
-        heroTitle: "Your home, your calm",
-        heroSub: "Just 5 minutes a day to bring calm back home.",
-        heroCta: "✨ Start a small task",
-        dailyTaskTitle: "✨ Task of the day",
-        start5: "Start 5-Minute Reset",
-        done: "Done",
-        noOpenTasks: "No open tasks",
-        completeTask: "Done",
-        createFirstTask: "Create first task",
-        weeklyProgress: "Weekly progress",
-        tasksLabel: "Tasks",
-        roomsLabel: "Rooms",
-        streakLabel: "Streak days",
-        trendCaption: "Last 7 days (tasks completed)",
-        weekBoard: "Week board",
-        yourDaySub: "Quick view of calendar and upcoming tasks.",
-        tasksByRoom: "Tasks by Room",
-        aiCoach: "AI Coach",
-        relevantVideo: "📺 Relevant video",
-        resetTitle: "5-Minute Reset",
-        resetFocusLine: "One focused stretch. You’ve got this.",
-        pause: "Pause",
-        resume: "Resume",
-        cancelSession: "Cancel",
-        completeEarly: "Finish early",
-        completeSaveError: "Could not save completion. Check your connection.",
-        refreshAfterSaveError: "Saved, but could not load the next task. Pull to refresh or try again from the card.",
-        retrySave: "Try again",
-        timerMvpNote: "Tip: refreshing the page will reset the timer (MVP).",
-        close: "Close",
-        greatJob: "Great job!",
-        challengeSuccessMotivation: "Small wins add up. One calm step at a time.",
-        challengeStatStreak: "{{n}}-day streak",
-        challengeStatWeek: "{{n}} tasks completed this week",
-        nextTaskCta: "Next task",
-        backDashboardCta: "Back to dashboard",
-        dailyTaskFallback: "Daily task",
-        allDay: "All day",
-        refresh: "Refresh",
-        refreshing: "Refreshing...",
-      }
-    : {
-        loading: "טוען...",
-        heroTitle: "הבית שלך, השקט שלך",
-        heroSub: "רק 5 דקות ביום כדי להחזיר שליטה לבית.",
-        heroCta: "✨ התחילי משימה קטנה",
-        dailyTaskTitle: "✨ משימת היום",
-        start5: "התחל איפוס 5 דקות",
-        done: "סיימתי",
-        noOpenTasks: "אין משימות פתוחות",
-        allDay: "כל היום",
-        completeTask: "סיימתי",
-        createFirstTask: "יצירת משימה ראשונה",
-        refresh: "החליפי משימה",
-        refreshing: "מחליפה...",
-        weeklyProgress: "התקדמות השבוע",
-        tasksLabel: "משימות",
-        roomsLabel: "חדרים",
-        streakLabel: "ימים רצופים",
-        trendCaption: "7 ימים אחרונים (משימות שהושלמו)",
-        weekBoard: "לוח השבוע",
-        yourDaySub: "מבט מהיר ליומן ולמשימות הקרובות.",
-        tasksByRoom: "משימות לפי חדר",
-        aiCoach: "AI Coach",
-        relevantVideo: "📺 סרטון רלוונטי",
-        resetTitle: "איפוס 5 דקות",
-        resetFocusLine: "ריכוז קצר. את בטוח מצליחה.",
-        pause: "השהה",
-        resume: "המשיכי",
-        cancelSession: "ביטול",
-        completeEarly: "סיימתי מוקדם",
-        completeSaveError: "לא ניתן לשמור את הסיום. בדקי חיבור.",
-        refreshAfterSaveError: "נשמר, אבל לא נטענה משימה חדשה. רענני את המסך או נסי שוב מהכרטיס.",
-        retrySave: "נסי שוב",
-        timerMvpNote: "שימי לב: רענון עמוד מאפס את הטיימר (גרסת MVP).",
-        close: "סגירה",
-        greatJob: "כל הכבוד!",
-        challengeSuccessMotivation: "ניצחונות קטנים מצטברים. צעד רגוע אחר צעד.",
-        challengeStatStreak: "רצף של {{n}} ימים",
-        challengeStatWeek: "{{n}} משימות שהושלמו השבוע",
-        nextTaskCta: "למשימה הבאה",
-        backDashboardCta: "חזרה לדשבורד",
-        dailyTaskFallback: "משימה יומית",
-      };
+  const { t: td, i18n } = useTranslation("dashboard");
+  const { t: tc } = useTranslation("challenge");
+  const { t: tRooms } = useTranslation("rooms");
+  const { t: tPc } = useTranslation("productCategories");
+  const dirAttr = isRtlLang(i18n.language) ? "rtl" : "ltr";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedRoom, setSelectedRoom] = useState<string>("living-room");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  /** 0 = Sunday … 6 = Saturday — drives which local tasks appear on the dashboard */
+  const [selectedDayIndex, setSelectedDayIndex] = useState(() => new Date().getDay());
+  /** Task id string currently playing the completion exit animation */
+  const [exitingTaskId, setExitingTaskId] = useState<string | null>(null);
   const [recommendedVideo, setRecommendedVideo] = useState<RecommendedVideo | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
-  const [videoTaskContextId, setVideoTaskContextId] = useState<string | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [isResetDone, setIsResetDone] = useState(false);
@@ -403,6 +220,7 @@ export default function Dashboard() {
       queryClient.setQueryData<DailyFocusRead>(["daily-reset", "today"], data);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "daily-tip"] });
       triggerProgressRefresh();
     },
   });
@@ -414,6 +232,7 @@ export default function Dashboard() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData<DailyFocusRead>(["daily-reset", "today"], data);
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "daily-tip"] });
     },
   });
 
@@ -431,6 +250,48 @@ export default function Dashboard() {
     refetchOnWindowFocus: true,
   });
 
+  const langParam = apiHeOrEn(i18n.language);
+  const calendarDayKey = (() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  })();
+  const dayMs = 86_400_000;
+
+  const {
+    data: dailyInspiration,
+    isPending: inspirationPending,
+    isError: inspirationError,
+  } = useQuery<DailyInspirationRead>({
+    queryKey: ["dashboard", "daily-inspiration", calendarDayKey, langParam],
+    queryFn: async () => {
+      const res = await getDailyInspiration(langParam);
+      return res.data;
+    },
+    staleTime: dayMs,
+    gcTime: dayMs * 2,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+  });
+
+  const {
+    data: dailyTip,
+    isPending: dailyTipPending,
+    isError: dailyTipError,
+  } = useQuery<DailyTipRead>({
+    queryKey: ["dashboard", "daily-tip", calendarDayKey, langParam],
+    queryFn: async () => {
+      const res = await getDailyTip(langParam);
+      return res.data;
+    },
+    staleTime: dayMs,
+    gcTime: dayMs * 2,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+  });
+
   useEffect(() => {
     const onProgressHook = () => {
       queryClient.invalidateQueries({ queryKey: ["progress"] });
@@ -440,10 +301,10 @@ export default function Dashboard() {
   }, [queryClient]);
 
   const rooms: DashboardRoom[] = [
-    { id: "living-room", nameHe: "סלון", nameEn: "Living Room", emoji: "🏠" },
-    { id: "kitchen", nameHe: "מטבח", nameEn: "Kitchen", emoji: "🍳" },
-    { id: "bedroom", nameHe: "חדר שינה", nameEn: "Bedroom", emoji: "🛏" },
-    { id: "closet", nameHe: "ארון", nameEn: "Closet", emoji: "👕" },
+    { id: "living-room", roomTypeKey: "living", emoji: "🏠" },
+    { id: "kitchen", roomTypeKey: "kitchen", emoji: "🍳" },
+    { id: "bedroom", roomTypeKey: "bedroom", emoji: "🛏" },
+    { id: "closet", roomTypeKey: "closet", emoji: "👕" },
   ];
 
   useEffect(() => {
@@ -471,14 +332,14 @@ export default function Dashboard() {
       if (savedTasks) {
         try {
           const parsedTasks = JSON.parse(savedTasks) as Task[];
-          const localizedTasks = localizeDemoTaskTitles(parsedTasks, isEnglish);
+          const localizedTasks = localizeDemoTaskTitles(parsedTasks, i18n.language);
           setTasks(localizedTasks);
           localStorage.setItem("tasks", JSON.stringify(localizedTasks));
         } catch (e) {
           console.error('[Dashboard] Error parsing saved tasks:', e);
         }
       } else {
-        const initialTasks = buildInitialDemoTasks(isEnglish);
+        const initialTasks = buildInitialDemoTasks(i18n.language);
         setTasks(initialTasks);
         localStorage.setItem("tasks", JSON.stringify(initialTasks));
       }
@@ -487,48 +348,56 @@ export default function Dashboard() {
     };
 
     loadUser();
-  }, [isEnglish, navigate]);
+  }, [i18n.language, navigate]);
 
-  const toggleTask = async (taskId: number | string) => {
-    const taskIdStr = String(taskId);
+  const visibleDashboardTasks = useMemo(
+    () => filterPendingTasksForSelectedDay(tasks, selectedDayIndex),
+    [tasks, selectedDayIndex]
+  );
+
+  const roomForVideo = useMemo(() => {
+    const first = visibleDashboardTasks[0];
+    return first?.room ?? "living-room";
+  }, [visibleDashboardTasks]);
+
+  const persistTaskComplete = async (taskIdStr: string) => {
     const currentTask = tasks.find((task) => String(task.id) === taskIdStr);
-    if (!currentTask) return;
-    const nextCompleted = !currentTask.completed;
+    if (!currentTask || currentTask.completed) return;
 
     const optimisticTasks = tasks.map((task) =>
-      String(task.id) === taskIdStr ? { ...task, completed: nextCompleted } : task
+      String(task.id) === taskIdStr ? { ...task, completed: true } : task
     );
     setTasks(optimisticTasks);
     localStorage.setItem("tasks", JSON.stringify(optimisticTasks));
 
     const numericId = Number(taskIdStr);
     if (!Number.isInteger(numericId) || numericId <= 0) {
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       return;
     }
 
     try {
-      await api.patch(`/tasks/${numericId}`, { completed: nextCompleted });
+      await api.patch(`/tasks/${numericId}`, { completed: true });
       queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     } catch {
-      // Revert optimistic update when backend update fails.
-      const revertedTasks = tasks.map((task) =>
-        String(task.id) === taskIdStr ? { ...task, completed: currentTask.completed } : task
-      );
-      setTasks(revertedTasks);
-      localStorage.setItem("tasks", JSON.stringify(revertedTasks));
+      setTasks((prev) => {
+        const reverted = prev.map((task) =>
+          String(task.id) === taskIdStr ? { ...task, completed: false } : task
+        );
+        localStorage.setItem("tasks", JSON.stringify(reverted));
+        return reverted;
+      });
     }
   };
-
-  const filteredTasks = tasks.filter((task) => task.room === selectedRoom);
-  const contextTask = videoTaskContextId ? tasks.find((task) => String(task.id) === videoTaskContextId) : undefined;
-  const roomForVideo = contextTask?.room || selectedRoom;
   useEffect(() => {
     if (!roomForVideo) return;
     let isMounted = true;
     setVideoLoading(true);
 
     api.get<RecommendedVideo>("/content/recommended-video", {
-      params: { room_id: roomForVideo, lang: isEnglish ? "en" : "he" },
+      params: { room_id: roomForVideo, lang: apiHeOrEn(i18n.language) },
     })
       .then(({ data }) => {
         if (!isMounted) return;
@@ -546,11 +415,7 @@ export default function Dashboard() {
     return () => {
       isMounted = false;
     };
-  }, [roomForVideo, isEnglish]);
-
-  useEffect(() => {
-    setVideoTaskContextId(null);
-  }, [selectedRoom]);
+  }, [roomForVideo, i18n.language]);
 
   // Get daily task from API
   const dailyTask = dailyFocus?.task || null;
@@ -565,32 +430,28 @@ export default function Dashboard() {
     return Math.max(1, ...arr.map((d) => d.count));
   }, [progressSummary]);
   const dailyTaskTime = dailyTask?.due_date
-    ? new Date(dailyTask.due_date).toLocaleTimeString(isEnglish ? "en-US" : "he-IL", { hour: "2-digit", minute: "2-digit" })
-    : text.allDay;
+    ? new Date(dailyTask.due_date).toLocaleTimeString(apiHeOrEn(i18n.language) === "he" ? "he-IL" : "en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : td("allDay");
   const secondsForClock = isResetDone ? 0 : timer ?? 0;
   const timerLabel = `${String(Math.floor(secondsForClock / 60)).padStart(2, "0")}:${String(
     secondsForClock % 60
   ).padStart(2, "0")}`;
-  const embeddedVideoId = recommendedVideo?.videoId || extractYouTubeId(recommendedVideo?.url) || "dQw4w9WgXcQ";
-  const embeddedVideoUrl = `https://www.youtube.com/embed/${embeddedVideoId}`;
-  
+  const videoId = recommendedVideo?.videoId || extractYouTubeId(recommendedVideo?.url) || "dQw4w9WgXcQ";
+  const youtubeWatchUrl =
+    recommendedVideo?.url || `https://www.youtube.com/watch?v=${videoId}`;
+  const youtubeThumbnailUrl =
+    recommendedVideo?.thumbnail ||
+    `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+  const youtubeDisplayTitle = recommendedVideo?.title?.trim() || td("youtubeFallbackTitle");
+
   // Get room info from daily task
   const dailyRoomId = dailyTask?.room_id;
   const dailyRoom = dailyRoomId ? rooms.find((r) => r.id === String(dailyRoomId)) : null;
-  const dailyRoomLabel = dailyRoom ? (isEnglish ? dailyRoom.nameEn : dailyRoom.nameHe) : "";
+  const dailyRoomLabel = dailyRoom ? tRooms(`room_types.${dailyRoom.roomTypeKey}`) : "";
   const dailyRoomEmoji = dailyRoom?.emoji || "🏡";
-  const roomTasks = tasks.filter((task) => task.room === selectedRoom);
-  const completedInRoom = roomTasks.filter((task) => task.completed).length;
-  const coachCandidates = ROOM_PLAYBOOK[selectedRoom] || [DEFAULT_COACH];
-  const coachIndex = coachCandidates.length
-    ? (new Date().getDate() + completedInRoom) % coachCandidates.length
-    : 0;
-  const coachRecommendationRaw = coachCandidates[coachIndex] || DEFAULT_COACH;
-  const coachRecommendation: RoomCoachItem = {
-    task: isEnglish ? coachRecommendationRaw.task.en : coachRecommendationRaw.task.he,
-    tip: isEnglish ? coachRecommendationRaw.tip.en : coachRecommendationRaw.tip.he,
-    example: isEnglish ? coachRecommendationRaw.example.en : coachRecommendationRaw.example.he,
-  };
 
   const startTimer = () => {
     if (!dailyTask || !dailyFocus) return;
@@ -650,7 +511,7 @@ export default function Dashboard() {
       return true;
     } catch {
       setCompleteSaveFailed(true);
-      showError(text.completeSaveError);
+      showError(tc("completeSaveError"));
       return false;
     }
   };
@@ -672,7 +533,7 @@ export default function Dashboard() {
     try {
       await refreshMutation.mutateAsync({});
     } catch {
-      showError(text.refreshAfterSaveError);
+      showError(tc("refreshAfterSaveError"));
     } finally {
       closeChallengeModalClean();
     }
@@ -694,7 +555,7 @@ export default function Dashboard() {
         task_id: dailyFocus.task_id || undefined,
       });
     } catch {
-      showError(text.completeSaveError);
+      showError(tc("completeSaveError"));
     }
   };
 
@@ -713,57 +574,146 @@ export default function Dashboard() {
 
   const challengeStatLine = useMemo(() => {
     if (streakDays != null && streakDays > 0) {
-      return text.challengeStatStreak.replace(/\{\{n\}\}/g, String(streakDays));
+      return tc("statStreak", { n: streakDays });
     }
     if (progressSummary != null && !progressLoading && !progressError) {
-      return text.challengeStatWeek.replace(
-        /\{\{n\}\}/g,
-        String(progressSummary.completed_tasks_this_week ?? 0),
-      );
+      return tc("statWeek", { n: progressSummary.completed_tasks_this_week ?? 0 });
     }
     return null;
-  }, [
-    streakDays,
-    progressSummary,
-    progressLoading,
-    progressError,
-    text.challengeStatStreak,
-    text.challengeStatWeek,
-  ]);
+  }, [streakDays, progressSummary, progressLoading, progressError, tc]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir={isEnglish ? "ltr" : "rtl"}>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir={dirAttr}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">{text.loading}</p>
+          <p className="text-gray-600">{td("loading")}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "grid", gap: 24 }} dir={isEnglish ? "ltr" : "rtl"}>
-      <div className="hero">
-        <div className="hero-content">
-          <h1>
-            {text.heroTitle}
-          </h1>
+    <div style={{ display: "grid", gap: 24 }} dir={dirAttr}>
+      <div className="dashboard-hero-compact">
+        <p className="dashboard-hero-compact__text">{td("heroCompactSub")}</p>
+        <button type="button" className="dashboard-hero-compact__btn" onClick={startSmallTask}>
+          {td("heroCompactCta")}
+        </button>
+      </div>
 
-          <p>
-            {text.heroSub}
-          </p>
+      <section className="daily-card dashboard-daily-section" aria-labelledby="dashboard-daily-tasks-heading">
+        <h2 id="dashboard-daily-tasks-heading" className="dashboard-daily-section__title">
+          {td("dailyTasksTitle")}
+        </h2>
+        {visibleDashboardTasks.length === 0 ? (
+          <div className="dashboard-daily-empty">
+            <p className="dashboard-daily-empty__text">{td("allClearForDay")}</p>
+            <button type="button" className="dashboard-daily-empty__cta" onClick={() => navigate(ROUTES.ADD_TASK)}>
+              {td("addDailyMonthlyTaskCta")}
+            </button>
+          </div>
+        ) : (
+          <div className="dashboard-daily-task-list">
+            {visibleDashboardTasks.map((task) => (
+              <DashboardDailyTaskCard
+                key={task.id}
+                task={task}
+                categoryLabel={getDashboardTaskCategoryLabel(task.room, tPc, tRooms)}
+                isExiting={exitingTaskId === String(task.id)}
+                onCompleteClick={() => {
+                  if (exitingTaskId) return;
+                  const reduceMotion =
+                    typeof window !== "undefined" &&
+                    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                  if (reduceMotion) {
+                    void persistTaskComplete(String(task.id));
+                    return;
+                  }
+                  setExitingTaskId(String(task.id));
+                }}
+                onExitAnimationEnd={() => {
+                  void persistTaskComplete(String(task.id));
+                  setExitingTaskId((cur) => (cur === String(task.id) ? null : cur));
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-          <button type="button" className="hero-btn" onClick={startSmallTask}>
-            {text.heroCta}
-          </button>
+      <DashboardWeekBar selectedDayIndex={selectedDayIndex} onSelectDay={setSelectedDayIndex} />
+
+      <section className="lifestyle-card" aria-labelledby="dashboard-youtube-heading">
+        <div className="lifestyle-title" id="dashboard-youtube-heading">
+          {td("youtubeRecommendedTitle")}
+        </div>
+        {videoLoading ? (
+          <div className="dashboard-youtube-skeleton" />
+        ) : (
+          <a
+            className="dashboard-youtube-card"
+            href={youtubeWatchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={td("youtubeLinkAria", { title: youtubeDisplayTitle })}
+          >
+            <div className="dashboard-youtube-card__thumb-wrap">
+              <img src={youtubeThumbnailUrl} alt="" className="dashboard-youtube-card__thumb" />
+            </div>
+            <div className="dashboard-youtube-card__meta">
+              <p className="dashboard-youtube-card__title">{youtubeDisplayTitle}</p>
+              <p className="dashboard-youtube-card__cta">{td("youtubeWatchCta")}</p>
+            </div>
+          </a>
+        )}
+      </section>
+
+      <div
+        className="dashboard-daily-insights"
+        style={{
+          display: "grid",
+          gap: 16,
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+        }}
+      >
+        <div className="daily-card" aria-live="polite">
+          <h2>{td("dailyInspirationTitle")}</h2>
+          {inspirationPending && !dailyInspiration ? (
+            <p className="task-title">{td("loading")}</p>
+          ) : inspirationError ? (
+            <p className="wow-muted">
+              {td("inspirationLoadError")}
+            </p>
+          ) : (
+            <p className="task-title" style={{ fontWeight: 500, lineHeight: 1.5 }}>
+              {dailyInspiration?.quote}
+            </p>
+          )}
+        </div>
+        <div className="daily-card" aria-live="polite">
+          <h2>{td("dailyTipTitle")}</h2>
+          <div className="wow-muted" style={{ fontSize: "0.85rem", marginBottom: 8 }}>
+            {td("dailyTipBadge")}
+          </div>
+          {dailyTipPending && !dailyTip ? (
+            <p className="task-title">{td("loading")}</p>
+          ) : dailyTipError ? (
+            <p className="wow-muted">
+              {td("tipLoadError")}
+            </p>
+          ) : (
+            <p className="task-title" style={{ fontWeight: 500, lineHeight: 1.5 }}>
+              {dailyTip?.tip}
+            </p>
+          )}
         </div>
       </div>
 
       <div className="daily-card">
-        <h2>{text.dailyTaskTitle}</h2>
+        <h2>{td("dailyTaskTitle")}</h2>
         {dailyFocusLoading ? (
-          <p className="task-title">{text.loading}</p>
+          <p className="task-title">{td("loading")}</p>
         ) : dailyTask ? (
           <>
             {dailyRoomLabel && (
@@ -775,12 +725,12 @@ export default function Dashboard() {
             )}
             {dailyFocus?.completed_at && (
               <div className="wow-muted" style={{ color: "#10b981" }}>
-                ✓ {isEnglish ? "Completed" : "הושלם"}
+                ✓ {td("completedBadge")}
               </div>
             )}
           </>
         ) : (
-          <p className="task-title">{text.noOpenTasks}</p>
+          <p className="task-title">{td("noOpenTasks")}</p>
         )}
 
         <div className="actions">
@@ -790,7 +740,7 @@ export default function Dashboard() {
             onClick={startTimer}
             disabled={!dailyTask || isResetOpen || !!dailyFocus?.completed_at}
           >
-            {text.start5}
+            {td("start5")}
           </button>
 
           <button 
@@ -799,7 +749,7 @@ export default function Dashboard() {
             onClick={completeDailyTaskFromCard}
             disabled={!dailyTask || completeMutation.isPending || !!dailyFocus?.completed_at}
           >
-            {completeMutation.isPending ? text.loading : text.done}
+            {completeMutation.isPending ? td("loading") : td("done")}
           </button>
 
           <button
@@ -807,50 +757,50 @@ export default function Dashboard() {
             className="secondary"
             onClick={refreshDailyTask}
             disabled={!dailyTask || refreshMutation.isPending || !!dailyFocus?.completed_at}
-            title={isEnglish ? "Get a different task" : "קבלי משימה אחרת"}
+            title={td("refreshTaskTitle")}
           >
-            {refreshMutation.isPending ? text.refreshing : text.refresh}
+            {refreshMutation.isPending ? td("refreshing") : td("refresh")}
           </button>
         </div>
 
         {!dailyTask && !dailyFocusLoading && (
           <div style={{ marginTop: 10 }}>
             <button type="button" className="wow-btn wow-btnPrimary" onClick={() => navigate(ROUTES.ADD_TASK)}>
-              {text.createFirstTask}
+              {td("createFirstTask")}
             </button>
           </div>
         )}
       </div>
 
       <div className="progress-card">
-        <h3>{text.weeklyProgress}</h3>
+        <h3>{td("weeklyProgress")}</h3>
 
         <div className="stats">
           <div className="stat">
             {progressLoading ? "—" : completedTasksCount}
-            <span>{text.tasksLabel}</span>
+            <span>{td("tasksLabel")}</span>
           </div>
 
           <div className="stat">
             {progressLoading ? "—" : organizedRoomsCount}
-            <span>{text.roomsLabel}</span>
+            <span>{td("roomsLabel")}</span>
           </div>
 
           <div className="stat">
             {progressLoading ? "—" : <>🔥 {streakDays}</>}
-            <span>{text.streakLabel}</span>
+            <span>{td("streakLabel")}</span>
           </div>
         </div>
 
         {!progressLoading && progressSummary && (
           <>
             <div className="lifestyle-muted" style={{ fontSize: 12, marginTop: 4 }}>
-              {text.trendCaption}
+              {td("trendCaption")}
             </div>
             <div
               className="progress-trend"
               role="img"
-              aria-label={isEnglish ? "Completed tasks per day, last 7 days" : "משימות שהושלמו לפי יום, 7 ימים"}
+              aria-label={td("progressTrendAria")}
             >
               {progressSummary.daily_completed_counts.map((d) => {
                 const dayNum = Number(d.date.slice(8, 10)) || 0;
@@ -867,74 +817,10 @@ export default function Dashboard() {
               (progressSummary.completed_tasks_this_week ?? 0) === 0 &&
               (progressSummary.streak_days ?? 0) === 0 && (
                 <p className="lifestyle-muted" style={{ fontSize: 13, margin: 0 }}>
-                  {isEnglish
-                    ? "Complete a task to start your week and streak — small steps count."
-                    : "השלימי משימה כדי להתחיל את השבוע והרצף — גם צעדים קטנים נספרים."}
+                  {td("progressEmptyHint")}
                 </p>
               )}
           </>
-        )}
-      </div>
-
-      <div className="lifestyle-card journal-card">
-        <div className="lifestyle-title">
-          {text.weekBoard}
-        </div>
-        <div className="lifestyle-muted journal-subtitle" style={{ marginBottom: 12 }}>
-          {text.yourDaySub}
-        </div>
-        <WeeklyCalendarStrip
-          tasks={tasks}
-          onToggleComplete={toggleTask}
-          onTaskSelect={(taskId) => setVideoTaskContextId(String(taskId))}
-        />
-      </div>
-
-      <div className="lifestyle-card">
-        <div className="lifestyle-title">
-          {text.tasksByRoom}
-        </div>
-
-        <div className="rooms-grid" style={{ marginTop: 16 }}>
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              className={`room-grid-card ${selectedRoom === room.id ? "room-grid-card--active" : ""}`}
-              onClick={() => setSelectedRoom(room.id)}
-            >
-              <span className="room-grid-emoji">{room.emoji}</span>
-              <span className="room-grid-name">{isEnglish ? room.nameEn : room.nameHe}</span>
-            </button>
-          ))}
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <TaskList
-            tasks={filteredTasks}
-            onTaskToggle={toggleTask}
-          />
-        </div>
-      </div>
-
-      <div className="lifestyle-card inspiration-card">
-        <div className="lifestyle-title">{text.aiCoach}</div>
-        <div className="coach-task">{coachRecommendation.task}</div>
-        <div className="wow-muted">{coachRecommendation.tip}</div>
-        <div className="coach-example">{coachRecommendation.example}</div>
-        <div className="lifestyle-title" style={{ fontSize: 18, marginTop: 8 }}>{text.relevantVideo}</div>
-        {videoLoading ? (
-          <div className="wow-skeleton" style={{ height: 180, borderRadius: 12 }} />
-        ) : (
-          <iframe
-            title="Eli quick tip"
-            src={embeddedVideoUrl}
-            className="inspiration-embed"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-            allowFullScreen
-          />
         )}
       </div>
 
@@ -948,9 +834,9 @@ export default function Dashboard() {
             {!isResetDone ? (
               <>
                 <div id="reset-challenge-title" className="reset-title">
-                  {text.resetTitle}
+                  {tc("title")}
                 </div>
-                <p className="reset-focus-line">{text.resetFocusLine}</p>
+                <p className="reset-focus-line">{tc("focusLine")}</p>
                 {resetSessionRoomRef.current ? (
                   <div className="reset-room-line">{resetSessionRoomRef.current}</div>
                 ) : null}
@@ -958,20 +844,20 @@ export default function Dashboard() {
                 <div className="reset-clock" aria-live="polite" aria-atomic="true">
                   {timerLabel}
                 </div>
-                <p className="reset-mvp-note">{text.timerMvpNote}</p>
+                <p className="reset-mvp-note">{tc("timerMvpNote")}</p>
                 <div className="reset-challenge-actions">
                   <button
                     type="button"
                     className="secondary"
                     onClick={() => setIsResetPaused((p) => !p)}
                   >
-                    {isResetPaused ? text.resume : text.pause}
+                    {isResetPaused ? tc("resume") : tc("pause")}
                   </button>
                   <button type="button" className="secondary" onClick={markChallengeFinishedEarly}>
-                    {text.completeEarly}
+                    {tc("completeEarly")}
                   </button>
                   <button type="button" className="secondary reset-btn-danger" onClick={cancelResetSession}>
-                    {text.cancelSession}
+                    {tc("cancelSession")}
                   </button>
                 </div>
               </>
@@ -980,19 +866,19 @@ export default function Dashboard() {
                 <div className="reset-success-visual" aria-hidden="true">
                   <span className="reset-success-check">✓</span>
                 </div>
-                <h2 className="reset-completion-title">{text.greatJob}</h2>
-                <p className="reset-completion-motivation">{text.challengeSuccessMotivation}</p>
+                <h2 className="reset-completion-title">{tc("greatJob")}</h2>
+                <p className="reset-completion-motivation">{tc("successMotivation")}</p>
                 {resetSessionRoomRef.current ? (
                   <div className="reset-room-line reset-completion-room">{resetSessionRoomRef.current}</div>
                 ) : null}
                 <div className="reset-task-title reset-completion-task">
-                  {resetSessionTitleRef.current || text.dailyTaskFallback}
+                  {resetSessionTitleRef.current || tc("dailyTaskFallback")}
                 </div>
                 {challengeStatLine ? <div className="reset-stat-pill">{challengeStatLine}</div> : null}
                 {completeSaveFailed ? (
                   <>
                     <p className="reset-save-error" role="alert">
-                      {text.completeSaveError}
+                      {tc("completeSaveError")}
                     </p>
                     <div className="reset-completion-actions">
                       <button
@@ -1001,7 +887,7 @@ export default function Dashboard() {
                         onClick={() => void saveChallengeCompletionOnly()}
                         disabled={completeMutation.isPending}
                       >
-                        {completeMutation.isPending ? text.loading : text.retrySave}
+                        {completeMutation.isPending ? td("loading") : tc("retrySave")}
                       </button>
                     </div>
                   </>
@@ -1013,7 +899,7 @@ export default function Dashboard() {
                       onClick={() => void finishChallengeNextTask()}
                       disabled={completeMutation.isPending || refreshMutation.isPending}
                     >
-                      {completeMutation.isPending || refreshMutation.isPending ? text.loading : text.nextTaskCta}
+                      {completeMutation.isPending || refreshMutation.isPending ? td("loading") : tc("nextTaskCta")}
                     </button>
                     <button
                       type="button"
@@ -1021,7 +907,7 @@ export default function Dashboard() {
                       onClick={() => void finishChallengeBackToDashboard()}
                       disabled={completeMutation.isPending || refreshMutation.isPending}
                     >
-                      {text.backDashboardCta}
+                      {tc("backDashboardCta")}
                     </button>
                   </div>
                 )}

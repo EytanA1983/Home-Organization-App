@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./WeeklyCalendarStrip.module.css";
 import type { Task } from "../app/types";
 import { useTranslation } from "react-i18next";
+import { apiHeOrEn, isRtlLang } from "../utils/localeDirection";
 
 const HEB_DAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 const EN_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -162,9 +163,10 @@ export default function WeeklyCalendarStrip({
   defaultDurationMin?: number;
 }) {
   const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const locale = isEnglish ? "en-US" : "he-IL";
-  const dayLabels = isEnglish ? EN_DAYS : HEB_DAYS;
+  const useHebrewUi = apiHeOrEn(i18n.language) === "he";
+  const locale = useHebrewUi ? "he-IL" : "en-US";
+  const dayLabels = useHebrewUi ? HEB_DAYS : EN_DAYS;
+  const dirAttr = isRtlLang(i18n.language) ? "rtl" : "ltr";
   const now = new Date();
   const weekStart = startOfWeekIsrael(now);
   const [viewMode, setViewMode] = useState<"weekly" | "daily">(() =>
@@ -293,13 +295,13 @@ export default function WeeklyCalendarStrip({
   return (
     <section
       className={styles.gcCard}
-      dir={isEnglish ? "ltr" : "rtl"}
-      aria-label={isEnglish ? "Google Calendar style weekly view" : "תצוגת שבוע בסגנון Google Calendar"}
+      dir={dirAttr}
+      aria-label={useHebrewUi ? "תצוגת שבוע בסגנון Google Calendar" : "Google Calendar style weekly view"}
     >
       <div className={styles.gcHeader}>
         <div className={styles.gcHeaderTop}>
           <div>
-            <div className={styles.gcTitle}>{viewMode === "weekly" ? (isEnglish ? "Your week" : "השבוע שלך") : (isEnglish ? "Your day" : "היום שלך")}</div>
+            <div className={styles.gcTitle}>{viewMode === "weekly" ? (useHebrewUi ? "השבוע שלך" : "Your week") : (useHebrewUi ? "היום שלך" : "Your day")}</div>
           </div>
           <div className={styles.gcControls}>
             <div className={styles.gcSegmented}>
@@ -308,14 +310,14 @@ export default function WeeklyCalendarStrip({
                 className={`${styles.gcSegmentBtn} ${viewMode === "daily" ? styles.gcSegmentBtnActive : ""}`}
                 onClick={() => setViewMode("daily")}
               >
-                {isEnglish ? "Daily" : "יומי"}
+                {useHebrewUi ? "יומי" : "Daily"}
               </button>
               <button
                 type="button"
                 className={`${styles.gcSegmentBtn} ${viewMode === "weekly" ? styles.gcSegmentBtnActive : ""}`}
                 onClick={() => setViewMode("weekly")}
               >
-                {isEnglish ? "Weekly" : "שבועי"}
+                {useHebrewUi ? "שבועי" : "Weekly"}
               </button>
             </div>
             {viewMode === "daily" && (
@@ -324,7 +326,7 @@ export default function WeeklyCalendarStrip({
                   type="button"
                   className={styles.gcDayNavBtn}
                   onClick={() => setActiveDayIndex((prev) => (prev + 6) % 7)}
-                  aria-label={isEnglish ? "Previous day" : "יום קודם"}
+                  aria-label={useHebrewUi ? "יום קודם" : "Previous day"}
                 >
                   ◀
                 </button>
@@ -333,7 +335,7 @@ export default function WeeklyCalendarStrip({
                   type="button"
                   className={styles.gcDayNavBtn}
                   onClick={() => setActiveDayIndex((prev) => (prev + 1) % 7)}
-                  aria-label={isEnglish ? "Next day" : "יום הבא"}
+                  aria-label={useHebrewUi ? "יום הבא" : "Next day"}
                 >
                   ▶
                 </button>
@@ -424,8 +426,8 @@ export default function WeeklyCalendarStrip({
                             e.stopPropagation();
                             onToggleComplete?.(t.originalId);
                           }}
-                          aria-label={t.completed ? (isEnglish ? "Unmark completed" : "בטל סימון") : (isEnglish ? "Mark completed" : "סמן כבוצע")}
-                          title={t.completed ? (isEnglish ? "Completed" : "בוצע") : (isEnglish ? "Mark completed" : "סמן כבוצע")}
+                          aria-label={t.completed ? (useHebrewUi ? "בטל סימון" : "Unmark completed") : (useHebrewUi ? "סמן כבוצע" : "Mark completed")}
+                          title={t.completed ? (useHebrewUi ? "בוצע" : "Completed") : (useHebrewUi ? "סמן כבוצע" : "Mark completed")}
                         >
                           {t.completed ? "✓" : ""}
                         </button>

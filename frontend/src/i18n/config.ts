@@ -1,111 +1,78 @@
 /**
- * i18n Configuration
- * תמיכה בריבוי שפות: עברית, אנגלית, רוסית
+ * i18n — he, en, ru, fr, ar (+ merged fr/ar on English base for missing keys).
  */
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
-// Import translation files - using type assertion to avoid TS errors
 import heTranslations from './locales/he.json';
 import enTranslations from './locales/en.json';
 import ruTranslations from './locales/ru.json';
+import frOverrides from './locales/fr.overrides.json';
+import arOverrides from './locales/ar.overrides.json';
+import { mergeDeep } from './mergeDeep';
+import { bundleLocale } from './localeBundle';
+
+const frPack = mergeDeep(enTranslations as Record<string, unknown>, frOverrides as Record<string, unknown>);
+const arPack = mergeDeep(enTranslations as Record<string, unknown>, arOverrides as Record<string, unknown>);
 
 i18n
-  // Detect user language
   .use(LanguageDetector)
-  // Pass the i18n instance to react-i18next
   .use(initReactI18next)
-  // Initialize i18next
   .init({
-    // Default language
-    fallbackLng: 'he',
-    
-    // Supported languages
-    supportedLngs: ['he', 'en', 'ru'],
-    
-    // Namespace
+    fallbackLng: {
+      fr: ['en', 'he'],
+      ar: ['en', 'he'],
+      default: ['he'],
+    },
+    supportedLngs: ['he', 'en', 'ru', 'fr', 'ar'],
     defaultNS: 'common',
-    ns: ['common', 'nav', 'a11y', 'validation', 'dates', 'pwa', 'rooms', 'tasks', 'todos', 'categories', 'auth', 'settings', 'calendar', 'toast', 'ml', 'privacy'],
-    
-    // Resources
+    ns: [
+      'common',
+      'nav',
+      'a11y',
+      'validation',
+      'dates',
+      'pwa',
+      'rooms',
+      'productCategories',
+      'tasks',
+      'todos',
+      'categories',
+      'auth',
+      'settings',
+      'calendar',
+      'toast',
+      'ml',
+      'privacy',
+      'layout',
+      'room',
+      'visionBoard',
+      'settingsUi',
+      'dashboard',
+      'emotionalJournal',
+      'challenge',
+      'emptyStates',
+      'errors',
+      'home',
+    ],
     resources: {
-      he: {
-        common: heTranslations.common,
-        nav: (heTranslations as any).nav,
-        a11y: (heTranslations as any).a11y,
-        validation: (heTranslations as any).validation,
-        dates: (heTranslations as any).dates,
-        pwa: (heTranslations as any).pwa,
-        rooms: heTranslations.rooms,
-        tasks: heTranslations.tasks,
-        todos: (heTranslations as any).todos,
-        categories: (heTranslations as any).categories,
-        auth: heTranslations.auth,
-        settings: heTranslations.settings,
-        calendar: heTranslations.calendar,
-        toast: heTranslations.toast,
-        ml: heTranslations.ml,
-        privacy: heTranslations.privacy,
-      },
-      en: {
-        common: enTranslations.common,
-        nav: (enTranslations as any).nav,
-        a11y: (enTranslations as any).a11y,
-        validation: (enTranslations as any).validation,
-        dates: (enTranslations as any).dates,
-        pwa: (enTranslations as any).pwa,
-        rooms: enTranslations.rooms,
-        tasks: enTranslations.tasks,
-        todos: (enTranslations as any).todos,
-        categories: (enTranslations as any).categories,
-        auth: enTranslations.auth,
-        settings: enTranslations.settings,
-        calendar: enTranslations.calendar,
-        toast: enTranslations.toast,
-        ml: enTranslations.ml,
-        privacy: enTranslations.privacy,
-      },
-      ru: {
-        common: ruTranslations.common,
-        nav: (ruTranslations as any).nav,
-        a11y: (ruTranslations as any).a11y,
-        validation: (ruTranslations as any).validation,
-        dates: (ruTranslations as any).dates,
-        pwa: (ruTranslations as any).pwa,
-        rooms: ruTranslations.rooms,
-        tasks: ruTranslations.tasks,
-        todos: (ruTranslations as any).todos,
-        categories: (ruTranslations as any).categories,
-        auth: ruTranslations.auth,
-        settings: ruTranslations.settings,
-        calendar: ruTranslations.calendar,
-        toast: ruTranslations.toast,
-        ml: ruTranslations.ml,
-        privacy: ruTranslations.privacy,
-      },
+      he: bundleLocale(heTranslations),
+      en: bundleLocale(enTranslations),
+      ru: bundleLocale(ruTranslations),
+      fr: bundleLocale(frPack),
+      ar: bundleLocale(arPack),
     },
-    
-    // Options
     interpolation: {
-      escapeValue: false, // React already escapes
+      escapeValue: false,
     },
-    
-    // Detection options
     detection: {
-      // Order of detection methods
       order: ['localStorage', 'navigator', 'htmlTag'],
-      
-      // Keys to lookup language from
       lookupLocalStorage: 'i18nextLng',
-      
-      // Cache user language
       caches: ['localStorage'],
     },
-    
-    // React options
     react: {
-      useSuspense: false, // Disable suspense for better compatibility
+      useSuspense: false,
     },
   });
 

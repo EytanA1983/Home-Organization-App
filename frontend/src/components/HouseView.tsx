@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVoice } from '../hooks/useVoice';
-import { getRoomRoute } from '../utils/routes';
+import { resolveAreaPath } from '../utils/routes';
 
 // אם יש קובץ SVG, ניתן לייבא אותו כך:
 // import houseSvgUrl from '../assets/house.svg?url';
@@ -15,7 +15,7 @@ export const HouseView = () => {
   // נניח שה‑SVG המותאם מכיל <g data-room-id="1" data-room-name="סלון">…</g> לכל חדר
   const onRoomClick = (roomId: number, roomName: string) => {
     speak(`נבחר חדר ${roomName}`);
-    navigate(getRoomRoute(roomId), { state: { name: roomName } });
+    navigate(resolveAreaPath({ id: roomId, name: roomName }), { state: { name: roomName } });
   };
 
   // טעינת SVG דינמית

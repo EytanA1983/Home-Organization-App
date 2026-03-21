@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { getRoomRoute } from "../utils/routes";
+import { resolveAreaPath } from "../utils/routes";
+import { getLocalizedRoomTitle } from "../utils/roomLocalization";
+import { isRtlLang } from "../utils/localeDirection";
 
 type RoomLike = {
   id: number | string;
@@ -31,7 +33,9 @@ const roomFill = (idx: number) => {
 export default function InteractiveHouseMap({ rooms }: Props) {
   const navigate = useNavigate();
   const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
+  const { t: tRooms } = useTranslation("rooms");
+  const { t } = useTranslation("rooms");
+  const rtl = isRtlLang(i18n.language);
 
   const roomSlots = useMemo(() => {
     return rooms.slice(0, SLOT_LAYOUT.length).map((room, idx) => ({
@@ -44,19 +48,19 @@ export default function InteractiveHouseMap({ rooms }: Props) {
   return (
     <section
       className="wow-card wow-pad"
-      dir={isEnglish ? "ltr" : "rtl"}
+      dir={rtl ? "rtl" : "ltr"}
       style={{ borderRadius: 20, overflow: "hidden", background: "rgba(255,255,255,0.72)" }}
     >
-      <svg viewBox="0 0 520 540" width="100%" role="img" aria-label={isEnglish ? "Interactive house map" : "מפת בית אינטראקטיבית"}>
+      <svg viewBox="0 0 520 540" width="100%" role="img" aria-label={t("hub.mapTitle")}>
         <rect x="10" y="10" width="500" height="520" rx="26" fill="#fffdf8" stroke="#d6cdbf" strokeWidth="2" />
         <text x="260" y="32" textAnchor="middle" fontSize="14" fill="#6b6358" fontWeight={700}>
-          {isEnglish ? "Tap a room to open tasks" : "לחצי על חדר כדי לפתוח משימות"}
+          {t("hub.mapTapHint")}
         </text>
 
         {roomSlots.map(({ room, slot, fill }) => (
           <g
             key={`map-room-${room.id}`}
-            onClick={() => navigate(getRoomRoute(room.id))}
+            onClick={() => navigate(resolveAreaPath({ id: Number(room.id), name: room.name }))}
             style={{ cursor: "pointer" }}
           >
             <rect
@@ -78,16 +82,14 @@ export default function InteractiveHouseMap({ rooms }: Props) {
               fontWeight={700}
               fill="#3d352b"
             >
-              {room.name}
+              {getLocalizedRoomTitle(room.name, tRooms, { roomId: room.id })}
             </text>
           </g>
         ))}
       </svg>
       {rooms.length > SLOT_LAYOUT.length && (
         <div className="wow-muted" style={{ marginTop: 8 }}>
-          {isEnglish
-            ? `+${rooms.length - SLOT_LAYOUT.length} more rooms available below`
-            : `+${rooms.length - SLOT_LAYOUT.length} חדרים נוספים זמינים בהמשך העמוד`}
+          {t("hub.mapMoreRooms", { count: rooms.length - SLOT_LAYOUT.length })}
         </div>
       )}
     </section>

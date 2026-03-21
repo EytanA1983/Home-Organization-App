@@ -1,7 +1,10 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { ProgressSummaryRead } from './schemas/progress';
+import type { DailyInspirationRead, DailyTipRead } from './schemas/dashboard';
+import type { VisionBoardRead, VisionBoardUpdate } from './schemas/vision_board';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './utils/tokenStorage';
 import { showError } from './utils/toast';
+import i18n from './i18n/config';
 
 /**
  * Resolve API base URL.
@@ -500,7 +503,7 @@ api.interceptors.response.use(
         if (isRefreshEndpoint) {
           clearTokens();
           if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-            showError('ההרשאה פגה. אנא התחבר שוב.');
+            showError(i18n.t('errors:sessionExpired'));
             window.location.href = '/login';
           }
         }
@@ -539,7 +542,7 @@ api.interceptors.response.use(
         // טיפול ב-401 עם toast
         // IMPORTANT: Don't redirect if we're on register page - let the page handle the error
         if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-          showError('ההרשאה פגה. אנא התחבר שוב.');
+          showError(i18n.t('errors:sessionExpired'));
           window.location.href = '/login';
         } else {
           // If we're on register/login page, just reject the error without redirect
@@ -609,7 +612,7 @@ api.interceptors.response.use(
         // טיפול ב-401 עם toast
         // IMPORTANT: Don't redirect if we're on register page - let the page handle the error
         if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-          showError('ההרשאה פגה. אנא התחבר שוב.');
+          showError(i18n.t('errors:sessionExpired'));
           window.location.href = '/login';
         } else {
           // If we're on register/login page, just reject the error without redirect
@@ -646,5 +649,20 @@ export const getProgressSummary = (range: "week" | "month" = "week") =>
   api.get<ProgressSummaryRead>("/progress/summary", {
     params: { range },
   });
+
+/** Deterministic daily inspiration (same quote all day; server calendar date). */
+export const getDailyInspiration = (lang: "he" | "en" = "he") =>
+  api.get<DailyInspirationRead>("/dashboard/daily-inspiration", { params: { lang } });
+
+/** Rule-based daily tip (stable for the day; personalized from DB context). */
+export const getDailyTip = (lang: "he" | "en" = "he") =>
+  api.get<DailyTipRead>("/dashboard/daily-tip", { params: { lang } });
+
+/** Per-user vision board (GET returns friendly defaults when no row exists). */
+export const getVisionBoard = (lang: "he" | "en" = "he") =>
+  api.get<VisionBoardRead>("/vision-board", { params: { lang } });
+
+export const putVisionBoard = (body: VisionBoardUpdate) =>
+  api.put<VisionBoardRead>("/vision-board", body);
 
 export default api;

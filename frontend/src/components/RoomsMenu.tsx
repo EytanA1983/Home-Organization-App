@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useRooms } from "../hooks/useRooms";
-import { ROUTES, getRoomRoute } from "../utils/routes";
+import { ROUTES, resolveAreaPath } from "../utils/routes";
 import { getRoomEmoji } from "../utils/roomColors";
 
 /**
@@ -33,8 +33,8 @@ export const RoomsMenu = () => {
     }
   }, [isOpen]);
 
-  const handleRoomClick = (roomId: number) => {
-    navigate(getRoomRoute(roomId));
+  const handleRoomClick = (room: { id: number; name: string }) => {
+    navigate(resolveAreaPath(room));
     setIsOpen(false);
   };
 
@@ -137,7 +137,7 @@ export const RoomsMenu = () => {
                 return (
                   <button
                     key={room.id}
-                    onClick={() => handleRoomClick(room.id)}
+                    onClick={() => handleRoomClick(room)}
                     className="
                       w-full px-4 py-3 flex items-center gap-3
                       hover:bg-gray-50 dark:hover:bg-gray-700
@@ -158,7 +158,7 @@ export const RoomsMenu = () => {
             {/* Footer - Link to all rooms page */}
             <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
               <NavLink
-                to={ROUTES.ROOMS}
+                to={ROUTES.CATEGORIES}
                 onClick={() => setIsOpen(false)}
                 className="
                   block text-sm text-sky-600 dark:text-sky-400

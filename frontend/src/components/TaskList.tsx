@@ -5,6 +5,7 @@ import TaskItem from "./TaskItem";
 import type { TaskRead } from "../schemas/task";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
+import { isRtlLang } from "../utils/localeDirection";
 
 interface Task {
   id: string;
@@ -29,20 +30,8 @@ const TaskList = ({
   filter,
 }: TaskListProps) => {
   const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const ui = isEnglish
-    ? {
-        fallbackTask: "Task",
-        loading: "Loading tasks...",
-        empty: "No tasks here right now",
-        emptyHint: "This is a great moment to add one small task.",
-      }
-    : {
-        fallbackTask: "משימה",
-        loading: "טוען משימות...",
-        empty: "אין משימות כאן כרגע",
-        emptyHint: "אולי זה זמן מושלם להוסיף משימה קטנה שתיצור שקט גדול.",
-      };
+  const { t } = useTranslation("emptyStates");
+  const rtl = isRtlLang(i18n.language);
   const queryClient = useQueryClient();
   const { data: fetchedTasks = [], isLoading } = useTasks(filter);
 
@@ -51,12 +40,12 @@ const TaskList = ({
 
     return (fetchedTasks as TaskRead[]).map((task) => ({
       id: String(task.id),
-      title: task.title ?? ui.fallbackTask,
+      title: task.title ?? t("taskList.fallbackTask"),
       completed: Boolean(task.completed),
       room_id: task.room_id ? String(task.room_id) : undefined,
       scope: (task as TaskRead & { scope?: string }).scope,
     }));
-  }, [tasks, fetchedTasks, ui.fallbackTask]);
+  }, [tasks, fetchedTasks, t]);
 
   const handleToggle = async (id: string) => {
     if (onTaskToggle) {
@@ -64,7 +53,7 @@ const TaskList = ({
       return;
     }
 
-    const current = effectiveTasks.find((t) => t.id === id);
+    const current = effectiveTasks.find((task) => task.id === id);
     if (!current) return;
 
     const numericId = Number(id);
@@ -81,7 +70,7 @@ const TaskList = ({
   if (isLoading && tasks.length === 0) {
     return (
       <div className="emptyState">
-        <div className="emptyTitle">{ui.loading}</div>
+        <div className="emptyTitle">{t("taskList.loading")}</div>
       </div>
     );
   }
@@ -89,10 +78,8 @@ const TaskList = ({
   if (!effectiveTasks || effectiveTasks.length === 0) {
     return (
       <div className="emptyState">
-        <div className="emptyTitle">{ui.empty}</div>
-        <div>
-          {ui.emptyHint}
-        </div>
+        <div className="emptyTitle">{t("taskList.empty")}</div>
+        <div>{t("taskList.emptyHint")}</div>
       </div>
     );
   }
@@ -100,12 +87,7 @@ const TaskList = ({
   return (
     <div className="taskList">
       {effectiveTasks.map((task) => (
-        <TaskItem
-          key={task.id}
-          task={task}
-          onToggle={handleToggle}
-          isEnglish={isEnglish}
-        />
+        <TaskItem key={task.id} task={task} onToggle={handleToggle} rtl={rtl} />
       ))}
     </div>
   );

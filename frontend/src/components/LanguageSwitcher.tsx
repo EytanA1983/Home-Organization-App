@@ -14,7 +14,9 @@ import { useTranslation } from 'react-i18next';
 export const LANGUAGES = [
   { code: 'he', name: 'עברית', nativeName: 'עברית', flag: '🇮🇱', dir: 'rtl' as const },
   { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧', dir: 'ltr' as const },
+  { code: 'fr', name: 'Français', nativeName: 'Français', flag: '🇫🇷', dir: 'ltr' as const },
   { code: 'ru', name: 'Русский', nativeName: 'Русский', flag: '🇷🇺', dir: 'ltr' as const },
+  { code: 'ar', name: 'العربية', nativeName: 'العربية', flag: '🇸🇦', dir: 'rtl' as const },
 ] as const;
 
 export type LanguageCode = typeof LANGUAGES[number]['code'];
@@ -74,7 +76,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
       <div 
         className={`flex items-center gap-2 ${className}`}
         role="radiogroup"
-        aria-label={t('language', 'שפה')}
+        aria-label={t('language')}
       >
         {LANGUAGES.map((lang) => (
           <button
@@ -117,7 +119,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
           "
           aria-expanded={isOpen}
           aria-haspopup="listbox"
-          aria-label={t('language', 'שפה')}
+          aria-label={t('language')}
         >
           <span>{currentLang.flag}</span>
           <span className="text-sm font-medium uppercase">{currentLang.code}</span>
@@ -180,7 +182,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         "
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        aria-label={t('language', 'שפה')}
+        aria-label={t('language')}
       >
         <span className="text-xl">{currentLang.flag}</span>
         <span className="flex-1 text-start text-gray-700 dark:text-dark-text">

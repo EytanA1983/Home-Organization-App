@@ -5,16 +5,19 @@ interface ModalProps {
   children: ReactNode;
   onClose: () => void;
   title?: string;
+  /** Subtitle under title. Omit = default copy; `null` = hide. */
+  description?: string | null;
   isOpen?: boolean;
 }
 
-export const Modal = ({ children, onClose, title, isOpen = true }: ModalProps) => {
+export const Modal = ({ children, onClose, title, description, isOpen = true }: ModalProps) => {
   const { i18n } = useTranslation();
   const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
   const modalTitle = title ?? (isEnglish ? "Choose one small task and keep moving" : "בוחרות משימה אחת וממשיכות בקטנה");
-  const modalSubtitle = isEnglish
+  const defaultSubtitle = isEnglish
     ? "Calm home = calm mind. Just 5 more focused minutes."
     : "שקט בבית = שקט בראש. רק עוד 5 דקות וסיימנו.";
+  const modalSubtitle = description === undefined ? defaultSubtitle : description;
   const closeLabel = isEnglish ? "Close" : "סגור";
 
   // Close on ESC key
@@ -43,9 +46,11 @@ export const Modal = ({ children, onClose, title, isOpen = true }: ModalProps) =
           <div className="wowModalHeader">
             <div>
               <h2 className="wowModalTitle">{modalTitle}</h2>
-              <p className="wow-muted" style={{ marginTop: 6, marginBottom: 0 }}>
-                {modalSubtitle}
-              </p>
+              {modalSubtitle != null && modalSubtitle !== "" ? (
+                <p className="wow-muted" style={{ marginTop: 6, marginBottom: 0 }}>
+                  {modalSubtitle}
+                </p>
+              ) : null}
             </div>
             <button
               onClick={onClose}

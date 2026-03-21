@@ -13,6 +13,7 @@ import { EventInput, DateSelectArg, EventChangeArg } from '@fullcalendar/core';
 import axios from 'axios';
 import api from '../api';
 import { useTranslation } from 'react-i18next';
+import { apiHeOrEn, isRtlLang } from '../utils/localeDirection';
 import { useVoice } from '../hooks/useVoice';
 import { showError, showPromise, showInfo } from '../utils/toast';
 import { CalendarEvent } from '../schemas/calendar';
@@ -48,7 +49,10 @@ function logAxios(err: unknown, label: string) {
 }
 
 export const CalendarPage: React.FC = () => {
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useTranslation('calendar');
+  const { t: tToast } = useTranslation('toast');
+  const { t: tTasks } = useTranslation('tasks');
+  const { t: tCommon } = useTranslation('common');
   const { speak } = useVoice();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -56,50 +60,8 @@ export const CalendarPage: React.FC = () => {
   const [calendarUnavailable, setCalendarUnavailable] = useState(false);
   const [view, setView] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay' | 'listWeek'>('dayGridMonth');
   const calendarRef = useRef<FullCalendar | null>(null);
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || 'he').startsWith('en');
-  const calendarLocale = isEnglish ? 'en' : 'he';
-  const calendarDirection = isEnglish ? 'ltr' : 'rtl';
-  const text = isEnglish
-    ? {
-        untitledEvent: 'Untitled event',
-        taskTitlePrompt: 'Task title',
-        taskUpdated: 'Task date updated',
-        taskUpdateError: 'Error updating task date',
-        taskPrefix: 'Task',
-        descriptionPrefix: 'Description',
-        createGoogleFromTask: 'Create a Google Calendar event from this task?',
-        createTaskFromEvent: (summary: string) => `Create a task from "${summary}"?`,
-        creatingTaskFromEvent: 'Creating task from event...',
-        taskCreatedFromEvent: 'Task created from event',
-        noTaskDueDate: 'Task has no due date.',
-        creatingGoogleEvent: 'Creating Google Calendar event...',
-        googleEventCreated: 'Google Calendar event created',
-        googleEventCreateFail: 'Failed to create Google Calendar event',
-        failedCreateEvent: 'We could not create the calendar event.',
-        eventCreateErrorSpeak: 'Error creating event',
-        taskCreatedSpeak: 'Task created',
-        noCalendarConnected: 'Google Calendar is not connected.',
-      }
-    : {
-        untitledEvent: 'אירוע ללא שם',
-        taskTitlePrompt: 'כותרת המשימה',
-        taskUpdated: 'תאריך המשימה עודכן',
-        taskUpdateError: 'שגיאה בעדכון תאריך',
-        taskPrefix: 'משימה',
-        descriptionPrefix: 'תיאור',
-        createGoogleFromTask: 'ליצור אירוע ב-Google Calendar מהמשימה הזו?',
-        createTaskFromEvent: (summary: string) => `ליצור משימה מהאירוע "${summary}"?`,
-        creatingTaskFromEvent: 'יוצר משימה מהאירוע...',
-        taskCreatedFromEvent: 'משימה נוצרה מהאירוע',
-        noTaskDueDate: 'למשימה אין תאריך יעד.',
-        creatingGoogleEvent: 'יוצר אירוע ב-Google Calendar...',
-        googleEventCreated: 'אירוע נוצר ב-Google Calendar',
-        googleEventCreateFail: 'שגיאה ביצירת אירוע ב-Google Calendar',
-        failedCreateEvent: 'לא הצלחנו ליצור אירוע ביומן.',
-        eventCreateErrorSpeak: 'שגיאה ביצירת אירוע',
-        taskCreatedSpeak: 'משימה נוצרה',
-        noCalendarConnected: 'Google Calendar לא מחובר.',
-      };
+  const calendarLocale = apiHeOrEn(i18n.language) === 'he' ? 'he' : 'en';
+  const calendarDirection = isRtlLang(i18n.language) ? 'rtl' : 'ltr';
 
   const handleViewChange = (nextView: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay' | 'listWeek') => {
     setView(nextView);
@@ -174,7 +136,7 @@ export const CalendarPage: React.FC = () => {
   // Convert Google Calendar events to FullCalendar events
   const googleEvents: EventInput[] = calendarEvents.map((event) => ({
     id: `event-${event.id}`,
-    title: event.summary || text.untitledEvent,
+    title: event.summary || t('untitledEvent'),
     start: event.start,
     end: event.end || event.start,
     backgroundColor: '#3B82F6', // Blue for calendar events
@@ -193,7 +155,7 @@ export const CalendarPage: React.FC = () => {
 
   const handleDateSelect = (selectInfo: DateSelectArg) => {
     // Create new task on date selection
-    const title = window.prompt(t('tasks:task_title') || text.taskTitlePrompt);
+    const title = window.prompt(tTasks('task_title') || t('promptTaskTitle'));
     if (title) {
       createTaskOnDate(title, selectInfo.start);
     }
@@ -212,15 +174,11 @@ export const CalendarPage: React.FC = () => {
       due_date: newDate.toISOString(),
     });
 
-    showPromise(
-      promise,
-      {
-        loading: t('toast:updating_task_date') || 'מעדכן תאריך משימה...',
-        success: t('toast:task_date_updated') || 'תאריך המשימה עודכן בהצלחה',
-        error: t('toast:task_date_update_failed') || 'שגיאה בעדכון תאריך המשימה',
-      },
-      t
-    );
+    showPromise(promise, {
+      loading: tToast('updating_task_date'),
+      success: tToast('task_date_updated'),
+      error: tToast('task_date_update_failed'),
+    });
 
     try {
       await promise;
@@ -232,12 +190,12 @@ export const CalendarPage: React.FC = () => {
         )
       );
 
-      speak(text.taskUpdated);
+      speak(t('speakTaskUpdated'));
     } catch (error: unknown) {
       logAxios(error, '[CalendarPage] Failed to update task date');
       // Revert event position
       eventInfo.revert();
-      speak(text.taskUpdateError);
+      speak(t('speakTaskUpdateError'));
     }
   };
 
@@ -253,15 +211,11 @@ export const CalendarPage: React.FC = () => {
       due_date: newEndDate.toISOString(),
     });
 
-    showPromise(
-      promise,
-      {
-        loading: t('toast:updating_task_date') || 'מעדכן תאריך משימה...',
-        success: t('toast:task_date_updated') || 'תאריך המשימה עודכן בהצלחה',
-        error: t('toast:task_date_update_failed') || 'שגיאה בעדכון תאריך המשימה',
-      },
-      t
-    );
+    showPromise(promise, {
+      loading: tToast('updating_task_date'),
+      success: tToast('task_date_updated'),
+      error: tToast('task_date_update_failed'),
+    });
 
     try {
       await promise;
@@ -272,11 +226,11 @@ export const CalendarPage: React.FC = () => {
         )
       );
 
-      speak(text.taskUpdated);
+      speak(t('speakTaskUpdated'));
     } catch (error: unknown) {
       logAxios(error, '[CalendarPage] Failed to resize/update task date');
       eventInfo.revert();
-      speak(text.taskUpdateError);
+      speak(t('speakTaskUpdateError'));
     }
   };
 
@@ -286,22 +240,19 @@ export const CalendarPage: React.FC = () => {
     if (eventType === 'task') {
       // Task clicked - show info and offer to create calendar event
       const taskId = clickInfo.event.extendedProps.taskId;
-      const task = tasks.find(t => t.id === taskId);
+      const task = tasks.find((tk) => tk.id === taskId);
       const description = clickInfo.event.extendedProps.description || '';
       
       if (task && task.due_date) {
         const shouldCreateEvent = window.confirm(
-          `${text.taskPrefix}: ${clickInfo.event.title}\n${description ? `${text.descriptionPrefix}: ${description}\n` : ''}\n${text.createGoogleFromTask}`
+          `${t('taskPrefix')}: ${clickInfo.event.title}\n${description ? `${t('descriptionPrefix')}: ${description}\n` : ''}\n${t('confirmCreateGoogleFromTask')}`
         );
         
         if (shouldCreateEvent) {
           await createEventFromTask(task);
         }
       } else {
-        showInfo(
-          `${clickInfo.event.title}${description ? `: ${description}` : ''}`,
-          t
-        );
+        showInfo(`${clickInfo.event.title}${description ? `: ${description}` : ''}`);
       }
     } else if (eventType === 'calendar') {
       // Calendar event clicked - offer to create task
@@ -312,7 +263,7 @@ export const CalendarPage: React.FC = () => {
         end: clickInfo.event.end?.toISOString() || '',
       };
       
-      const shouldCreate = window.confirm(text.createTaskFromEvent(eventData.summary));
+      const shouldCreate = window.confirm(t('createTaskFromEvent', { summary: eventData.summary }));
       
       if (shouldCreate) {
         await createTaskFromEvent(eventData);
@@ -327,57 +278,49 @@ export const CalendarPage: React.FC = () => {
       due_date: event.start,
     });
 
-    showPromise(
-      promise,
-      {
-        loading: t('toast:creating_task') || text.creatingTaskFromEvent,
-        success: t('toast:task_created') || text.taskCreatedFromEvent,
-        error: t('toast:task_creation_failed') || 'שגיאה ביצירת משימה מהאירוע',
-      },
-      t
-    );
+    showPromise(promise, {
+      loading: tToast('creating_task'),
+      success: tToast('task_created'),
+      error: tToast('task_creation_failed'),
+    });
 
     try {
       await promise;
       await loadTasks();
-      speak(text.taskCreatedFromEvent);
+      speak(t('speakTaskCreatedFromEvent'));
     } catch (error: unknown) {
       logAxios(error, '[CalendarPage] Failed to create task from event');
-      speak(t('toast:task_creation_failed') || 'שגיאה ביצירת משימה');
+      speak(tToast('task_creation_failed'));
     }
   };
 
   // Create Google Calendar event from task (optional feature)
   const createEventFromTask = async (task: Task) => {
     if (!task.due_date) {
-      showError(text.noTaskDueDate);
+      showError(t('noTaskDueDate'));
       return;
     }
 
     try {
       // Create event for this specific task
       const promise = api.post(`/google-calendar/sync-tasks?task_id=${task.id}`);
-      
-      showPromise(
-        promise,
-        {
-          loading: text.creatingGoogleEvent,
-          success: text.googleEventCreated,
-          error: text.googleEventCreateFail,
-        },
-        t
-      );
+
+      showPromise(promise, {
+        loading: t('creatingGoogleEvent'),
+        success: t('googleEventCreated'),
+        error: t('googleEventCreateFail'),
+      });
 
       await promise;
       await loadCalendarEvents(); // Reload calendar events
-      speak(text.googleEventCreated);
+      speak(t('googleEventCreated'));
     } catch (error: unknown) {
       logAxios(error, '[CalendarPage] Failed to create event from task');
       const detail = axios.isAxiosError(error)
         ? error.response?.data?.detail
         : undefined;
-      showError(detail || text.failedCreateEvent);
-      speak(text.eventCreateErrorSpeak);
+      showError(detail || t('failedCreateEvent'));
+      speak(t('speakEventCreateError'));
     }
   };
 
@@ -387,30 +330,26 @@ export const CalendarPage: React.FC = () => {
       due_date: date.toISOString(),
     });
 
-    showPromise(
-      promise,
-      {
-        loading: t('toast:creating_task') || 'יוצר משימה...',
-        success: t('toast:task_created') || 'משימה נוצרה בהצלחה',
-        error: t('toast:task_creation_failed') || 'שגיאה ביצירת משימה',
-      },
-      t
-    );
+    showPromise(promise, {
+      loading: tToast('creating_task'),
+      success: tToast('task_created'),
+      error: tToast('task_creation_failed'),
+    });
 
     try {
       await promise;
       await loadTasks();
-      speak(text.taskCreatedSpeak);
+      speak(t('speakTaskCreated'));
     } catch (error: unknown) {
       logAxios(error, '[CalendarPage] Failed to create task');
-      speak('שגיאה ביצירת משימה');
+      speak(tToast('task_creation_failed'));
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">{t('common:loading')}</div>
+        <div className="text-gray-600">{tCommon('loading')}</div>
       </div>
     );
   }
@@ -420,12 +359,12 @@ export const CalendarPage: React.FC = () => {
       <div className="bg-white dark:bg-dark-surface rounded-lg shadow-lg p-4">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-dark-text">
-            {t('calendar:title')}
+            {t('title')}
           </h1>
           <div className="flex gap-2 flex-wrap">
             {calendarUnavailable && (
               <span className="text-sm text-amber-600 dark:text-amber-300">
-                {text.noCalendarConnected}
+                {t('noCalendarConnected')}
               </span>
             )}
             <button
@@ -436,7 +375,7 @@ export const CalendarPage: React.FC = () => {
                   : 'bg-gray-200 dark:bg-dark-surface text-gray-700 dark:text-dark-text'
               }`}
             >
-              {t('calendar:month')}
+              {t('month')}
             </button>
             <button
               onClick={() => handleViewChange('timeGridWeek')}
@@ -444,7 +383,7 @@ export const CalendarPage: React.FC = () => {
                 view === 'timeGridWeek' ? 'bg-mint text-white' : 'bg-gray-200 text-gray-700'
               }`}
             >
-              {t('calendar:week')}
+              {t('week')}
             </button>
             <button
               onClick={() => handleViewChange('timeGridDay')}
@@ -452,7 +391,7 @@ export const CalendarPage: React.FC = () => {
                 view === 'timeGridDay' ? 'bg-mint text-white' : 'bg-gray-200 text-gray-700'
               }`}
             >
-              {t('calendar:day')}
+              {t('day')}
             </button>
             <button
               onClick={() => handleViewChange('listWeek')}
@@ -460,7 +399,7 @@ export const CalendarPage: React.FC = () => {
                 view === 'listWeek' ? 'bg-mint text-white' : 'bg-gray-200 text-gray-700'
               }`}
             >
-              {t('calendar:list')}
+              {t('list')}
             </button>
           </div>
         </div>

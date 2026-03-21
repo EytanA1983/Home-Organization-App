@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api";
 import { InventoryAreaRead, InventoryItemRead } from "../schemas/inventory";
 import { showError, showSuccess } from "../utils/toast";
 import { useTranslation } from "react-i18next";
+import { ROUTES } from "../utils/routes";
 
 export default function InventoryPage() {
   const { i18n } = useTranslation();
+  const { t: tl } = useTranslation("layout");
   const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
   const text = isEnglish
     ? {
-        title: "Home Inventory",
-        subtitle: "Catalog items by storage area with quantity and photos.",
+        title: "Supplies & home catalog",
+        subtitle: "Track quantities and photos by storage zone — optional alongside categories.",
         areaName: "Area name",
         areaPlaceholder: "e.g. Wardrobe",
         addArea: "Add area",
@@ -24,8 +27,8 @@ export default function InventoryPage() {
         noItems: "No items in this area yet.",
       }
     : {
-        title: "קטלוג חפצים בבית",
-        subtitle: "סדרי חפצים לפי אזורים עם כמות ותמונה.",
+        title: "אספקה וקטלוג בית",
+        subtitle: "מעקב כמויות ותמונות לפי אזור אחסון — משלים את הקטגוריות.",
         areaName: "שם אזור",
         areaPlaceholder: "לדוגמה: ארון בגדים",
         addArea: "הוספת אזור",
@@ -144,6 +147,12 @@ export default function InventoryPage() {
       <section className="lifestyle-card">
         <div className="lifestyle-title">{text.title}</div>
         <div className="lifestyle-muted">{text.subtitle}</div>
+        <p className="wow-muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
+          {tl("inventoryKicker")}{" "}
+          <Link to={ROUTES.CATEGORIES} className="wow-btn" style={{ display: "inline-flex", padding: "2px 10px", fontSize: "0.85rem" }}>
+            {tl("inventoryBackCategories")}
+          </Link>
+        </p>
       </section>
 
       <section className="lifestyle-card">

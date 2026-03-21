@@ -1,10 +1,12 @@
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getRoomRoute } from '../utils/routes';
+import { resolveAreaPath } from '../utils/routes';
 import { useTasks } from '../hooks/useTasks';
 import type { TaskRead } from '../schemas/task';
 import styles from './RoomCard.module.css';
+import type { RoomCategory } from '../utils/roomLocalization';
+import { getLocalizedRoomSubtitle, getLocalizedRoomTitle, inferRoomCategory } from '../utils/roomLocalization';
 
 type Props = { 
   roomId: number; 
@@ -12,87 +14,8 @@ type Props = {
   customColor?: string;
 };
 
-// Room type detection and color mapping
-type RoomType = 
-  | 'living' 
-  | 'kitchen' 
-  | 'bedroom' 
-  | 'bathroom' 
-  | 'office' 
-  | 'balcony' 
-  | 'closet' 
-  | 'kids'
-  | 'laundry'
-  | 'garage'
-  | 'default';
-
-// Detect room type from name (memoized outside component)
-const detectRoomType = (roomName: string): RoomType => {
-  const name = roomName.toLowerCase();
-  
-  if (name.includes('סלון') || name.includes('living') || name.includes('לובי') || name.includes('lobby')) {
-    return 'living';
-  }
-  if (name.includes('מטבח') || name.includes('kitchen') || name.includes('אוכל') || name.includes('dining')) {
-    return 'kitchen';
-  }
-  if (name.includes('שינה') || name.includes('bedroom') || name.includes('חדר הורים')) {
-    return 'bedroom';
-  }
-  if (name.includes('שירותים') || name.includes('bathroom') || name.includes('אמבטיה') || name.includes('מקלחת')) {
-    return 'bathroom';
-  }
-  if (name.includes('משרד') || name.includes('office') || name.includes('עבודה') || name.includes('study')) {
-    return 'office';
-  }
-  if (name.includes('מרפסת') || name.includes('balcony') || name.includes('גינה') || name.includes('garden') || name.includes('פטיו')) {
-    return 'balcony';
-  }
-  if (name.includes('ארון') || name.includes('closet') || name.includes('מחסן') || name.includes('storage')) {
-    return 'closet';
-  }
-  if (name.includes('ילדים') || name.includes('kids') || name.includes('תינוק') || name.includes('baby') || name.includes('משחקים')) {
-    return 'kids';
-  }
-  if (name.includes('מכבסה') || name.includes('laundry') || name.includes('כביסה')) {
-    return 'laundry';
-  }
-  if (name.includes('מוסך') || name.includes('garage') || name.includes('חניה') || name.includes('parking')) {
-    return 'garage';
-  }
-  
-  return 'default';
-};
-
-const getRoomSubtitle = (roomType: RoomType, isEnglish: boolean): string => {
-  switch (roomType) {
-    case 'living':
-      return isEnglish ? 'Living room - room to breathe' : 'סלון — אוויר לנשימה';
-    case 'kitchen':
-      return isEnglish ? 'Kitchen - small order that calms the day' : 'מטבח — סדר קטן שמרגיע את היום';
-    case 'bedroom':
-      return isEnglish ? 'Bedroom - calm starts in the closet' : 'חדר שינה — שקט שמתחיל בארון';
-    case 'bathroom':
-      return isEnglish ? 'Bathroom - quick clean, fresh feeling' : 'אמבטיה — ניקיון קל, תחושת רעננות';
-    case 'office':
-      return isEnglish ? 'Office - focused space without clutter' : 'משרד — מיקוד נעים בלי עומס';
-    case 'balcony':
-      return isEnglish ? 'Balcony - a light corner to clear your mind' : 'מרפסת — פינה קלה לניקוי הראש';
-    case 'closet':
-      return isEnglish ? 'Closet - fewer items, less pressure' : 'ארון — פחות חפצים, פחות לחצים';
-    case 'kids':
-      return isEnglish ? 'Kids room - one toy at a time' : 'חדר ילדים — צעצוע אחד בכל פעם';
-    case 'laundry':
-      return isEnglish ? 'Laundry - a few calm minutes of folding' : 'מכבסה — כמה דקות של קיפול שקט';
-    case 'garage':
-      return isEnglish ? 'Garage - functional and clean order' : 'מוסך — סדר פונקציונלי ונקי';
-    default:
-      return isEnglish ? 'Personal space for a calm daily reset' : 'מרחב אישי לסדר יומי רגוע';
-  }
-};
-
 // Get CSS variable for room type
-const getRoomStyle = (roomType: RoomType, customColor?: string): React.CSSProperties => {
+const getRoomStyle = (roomType: RoomCategory, customColor?: string): React.CSSProperties => {
   if (customColor) {
     return {
       background: 'var(--color-surface)',
@@ -187,27 +110,23 @@ TaskCountBadge.displayName = 'TaskCountBadge';
 
 // Main RoomCard component with React.memo
 const RoomCardComponent = ({ roomId, name, customColor }: Props) => {
-  const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || 'he').startsWith('en');
+  const { t } = useTranslation('rooms');
   const { data: tasks = [], isLoading } = useTasks({ roomId });
-  const labels = isEnglish
-    ? {
-        complete: 'Completed',
-        loading: 'Loading...',
-        noTasks: 'No tasks yet',
-        completedSuffix: 'completed',
-      }
-    : {
-        complete: 'הושלם',
-        loading: 'טוען...',
-        noTasks: 'אין משימות',
-        completedSuffix: 'הושלמו',
-      };
+  const labels = useMemo(
+    () => ({
+      complete: t('card.complete'),
+      loading: t('card.loading'),
+      noTasks: t('card.no_tasks'),
+      completedSuffix: t('card.completed_suffix'),
+    }),
+    [t],
+  );
 
   // Memoized calculations
-  const roomType = useMemo(() => detectRoomType(name), [name]);
+  const roomType = useMemo(() => inferRoomCategory(name), [name]);
+  const displayName = useMemo(() => getLocalizedRoomTitle(name, t, { roomId }), [name, t, roomId]);
   const roomStyle = useMemo(() => getRoomStyle(roomType, customColor), [roomType, customColor]);
-  const roomSubtitle = useMemo(() => getRoomSubtitle(roomType, isEnglish), [roomType, isEnglish]);
+  const roomSubtitle = useMemo(() => getLocalizedRoomSubtitle(name, t), [name, t]);
   
   // Memoize task statistics
   const { progress, completedCount, isComplete } = useMemo(() => {
@@ -225,7 +144,7 @@ const RoomCardComponent = ({ roomId, name, customColor }: Props) => {
 
   return (
     <Link 
-      to={getRoomRoute(roomId)} 
+      to={resolveAreaPath({ id: roomId, name })} 
       className={`
         ${styles.card}
         block relative
@@ -239,7 +158,7 @@ const RoomCardComponent = ({ roomId, name, customColor }: Props) => {
       {/* Room header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className={`${styles.title} truncate`}>{name}</h3>
+          <h3 className={`${styles.title} truncate`}>{displayName}</h3>
           <p className={styles.subtitle}>{roomSubtitle}</p>
         </div>
       </div>

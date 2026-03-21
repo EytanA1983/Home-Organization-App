@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface Task {
   id: string;
   title: string;
@@ -9,12 +11,14 @@ interface Task {
 interface TaskItemProps {
   task: Task;
   onToggle: (id: string) => void;
-  isEnglish?: boolean;
+  /** Layout direction for the row (true = RTL for Hebrew/Arabic UI). */
+  rtl?: boolean;
 }
 
-const TaskItem = ({ task, onToggle, isEnglish = false }: TaskItemProps) => {
+const TaskItem = ({ task, onToggle, rtl = true }: TaskItemProps) => {
+  const { t } = useTranslation("dates");
   return (
-    <div className="taskCard" dir={isEnglish ? "ltr" : "rtl"}>
+    <div className="taskCard" dir={rtl ? "rtl" : "ltr"}>
       <button
         className={`taskCheck ${task.completed ? "taskCheckDone" : ""}`}
         onClick={() => onToggle(task.id)}
@@ -41,7 +45,7 @@ const TaskItem = ({ task, onToggle, isEnglish = false }: TaskItemProps) => {
                 task.scope === "today" ? "chipAccent" : ""
               }`}
             >
-              {task.scope === "today" ? (isEnglish ? "Today" : "היום") : task.scope}
+              {task.scope === "today" ? t("today") : task.scope}
             </span>
           )}
         </div>
