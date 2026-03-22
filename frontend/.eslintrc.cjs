@@ -226,9 +226,13 @@ module.exports = {
         '@typescript-eslint/no-non-null-assertion': 'off',
       },
     },
-    // Cypress files
+    // Cypress files (separate TS project — avoids parserOptions.project mismatch with ./src)
     {
       files: ['cypress/**/*.ts', 'cypress/**/*.tsx'],
+      parserOptions: {
+        project: './cypress/tsconfig.json',
+        tsconfigRootDir: __dirname,
+      },
       rules: {
         '@typescript-eslint/no-namespace': 'off',
       },

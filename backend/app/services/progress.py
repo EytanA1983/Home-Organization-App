@@ -12,14 +12,15 @@ Tasks with completed=True but both timestamps NULL are ignored for all date-base
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Set, Tuple
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.models import Task
-from app.schemas.progress import DailyCompletedCount, ProgressSummaryRead
+from app.schemas.progress import CategoryProgressItem, DailyCompletedCount, ProgressSummaryRead
+from app.services.product_category_inference import infer_category_for_task
 
 
 def _utc_now() -> datetime:
@@ -111,10 +112,41 @@ def compute_progress_summary(db: Session, user_id: int, range_key: str) -> Progr
         d = today - timedelta(days=i)
         daily_completed_counts.append(DailyCompletedCount(date=d, count=per_day_counter.get(d, 0)))
 
+    # -------------------------------------------------------------------------
+    # Category-level progress (all tasks for user; slice sizes = workload share).
+    # -------------------------------------------------------------------------
+    all_tasks = (
+        db.query(Task)
+        .options(joinedload(Task.room), joinedload(Task.category))
+        .filter(Task.user_id == user_id)
+        .all()
+    )
+    totals: dict[str, int] = defaultdict(int)
+    completed_by_cat: dict[str, int] = defaultdict(int)
+    for t in all_tasks:
+        room_name = t.room.name if t.room else None
+        cat_name = t.category.name if t.category else None
+        key = infer_category_for_task(room_name, cat_name)
+        if key is None:
+            key = "other"
+        totals[key] += 1
+        if t.completed:
+            completed_by_cat[key] += 1
+
+    category_progress: list[CategoryProgressItem] = []
+    for cat_key in sorted(totals.keys(), key=lambda k: (-totals[k], k)):
+        tot = totals[cat_key]
+        done = completed_by_cat.get(cat_key, 0)
+        pct = int(round(100.0 * done / tot)) if tot > 0 else 0
+        category_progress.append(
+            CategoryProgressItem(category=cat_key, completed=done, total=tot, percent=pct)
+        )
+
     return ProgressSummaryRead(
         completed_tasks_this_week=completed_tasks_in_period,
         rooms_progressed_this_week=len(rooms_with_completion_in_period),
         streak_days=streak_days,
         daily_completed_counts=daily_completed_counts,
+        category_progress=category_progress,
         range=range_key,  # type: ignore[arg-type]
     )

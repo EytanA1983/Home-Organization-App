@@ -110,3 +110,71 @@
   100%{ background-position: -200% 0; }
 }
 
+/* Categories page — minimal “add storage area” control */
+.categories-map-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.categories-add-area-trigger {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: border-color var(--t) ease, color var(--t) ease, background var(--t) ease;
+}
+
+.categories-add-area-trigger:hover {
+  transform: none;
+  color: var(--text);
+  border-color: rgba(160, 124, 254, 0.45);
+  background: var(--accentSoft);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.categories-add-area-trigger:focus-visible {
+  outline: 2px solid rgba(160, 124, 254, 0.55);
+  outline-offset: 2px;
+}
+
+.categories-add-area-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.categories-add-area-form .input {
+  flex: 1 1 180px;
+  max-width: 360px;
+  padding: 10px 12px;
+}
+
+.categories-add-area-form .wow-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.categories-add-area-form .wow-btn--ghost {
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+

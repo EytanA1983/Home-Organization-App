@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import api from '../api';
 import { ROUTES } from '../utils/routes';
@@ -8,67 +9,12 @@ import { setTokens, clearTokens, getAccessToken } from '../utils/tokenStorage';
 import '../styles/Auth.css';
 import { useTranslation } from 'react-i18next';
 import { smokeDebug } from '../utils/smokeDebug';
+import { isRtlLang } from '../utils/localeDirection';
 
 export const RegisterPage = () => {
-  const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const text = isEnglish
-    ? {
-        googleFail: "Google login is unavailable right now. Please try again.",
-        passwordMismatch: "Passwords do not match.",
-        passwordShort: "Password must be at least 8 characters.",
-        registerFail: "Unable to complete registration right now.",
-        storageFail: "Unable to save sign-in details in this browser.",
-        unknownError: "Unknown error",
-        fallbackUser: "User",
-        welcome: (name: string) => `Welcome ${name}, registration completed successfully.`,
-        genericFail: "We couldn't complete registration. Please try again.",
-        serverFail: "Temporary server issue. Please try again shortly.",
-        tempFail: "A temporary error occurred. Please try again.",
-        noResponse: "No response from server right now. Please try again shortly.",
-        title: "Welcome",
-        subtitle: "Start building a calmer, organized home.",
-        email: "Email",
-        fullName: "Full name (optional)",
-        fullNamePlaceholder: "Enter full name",
-        password: "Password",
-        passwordPlaceholder: "At least 8 characters",
-        confirmPassword: "Confirm password",
-        confirmPasswordPlaceholder: "Re-enter password",
-        registering: "Registering...",
-        register: "Register",
-        google: "Continue with Google",
-        haveAccount: "Already have an account?",
-        login: "Sign in",
-      }
-    : {
-        googleFail: "לא הצלחנו להתחבר ל-Google כרגע. נסו שוב.",
-        passwordMismatch: "הסיסמאות אינן תואמות.",
-        passwordShort: "הסיסמה צריכה להכיל לפחות 8 תווים.",
-        registerFail: "לא ניתן להשלים את ההרשמה כרגע.",
-        storageFail: "לא ניתן לשמור את פרטי ההתחברות בדפדפן.",
-        unknownError: "שגיאה לא ידועה",
-        fallbackUser: "משתמש",
-        welcome: (name: string) => `ברוך הבא ${name}, ההרשמה הושלמה בהצלחה.`,
-        genericFail: "לא הצלחנו להשלים את ההרשמה. נסו שוב.",
-        serverFail: "יש תקלה זמנית בשרת. נסו שוב בעוד רגע.",
-        tempFail: "אירעה תקלה זמנית. נסו שוב.",
-        noResponse: "לא התקבלה תשובה מהשרת כרגע. נסו שוב בעוד רגע.",
-        title: "ברוכה הבאה",
-        subtitle: "התחילי ליצור בית רגוע ומסודר.",
-        email: "אימייל",
-        fullName: "שם מלא (אופציונלי)",
-        fullNamePlaceholder: "הזן שם מלא",
-        password: "סיסמה",
-        passwordPlaceholder: "לפחות 8 תווים",
-        confirmPassword: "אימות סיסמה",
-        confirmPasswordPlaceholder: "הזן שוב את הסיסמה",
-        registering: "נרשם...",
-        register: "הרשמה",
-        google: "התחברות עם Google",
-        haveAccount: "כבר יש לך חשבון?",
-        login: "להתחברות",
-      };
+  const { t, i18n } = useTranslation(['auth', 'validation']);
+  const lang = i18n.resolvedLanguage || i18n.language;
+  const rtl = isRtlLang(lang);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -76,6 +22,7 @@ export const RegisterPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const handleGoogleLogin = async () => {
     try {
@@ -84,10 +31,10 @@ export const RegisterPage = () => {
         window.location.href = data.auth_url;
         return;
       }
-      showError(text.googleFail);
+      showError(t('auth:google_unavailable'));
     } catch (error) {
       console.error('[RegisterPage] Google login init failed:', error);
-      showError(text.googleFail);
+      showError(t('auth:google_unavailable'));
     }
   };
 
@@ -97,12 +44,12 @@ export const RegisterPage = () => {
 
     // Validation
     if (password !== confirmPassword) {
-      setError(text.passwordMismatch);
+      setError(t('validation:password_mismatch'));
       return;
     }
 
     if (password.length < 8) {
-      setError(text.passwordShort);
+      setError(t('validation:password_min', { min: 8 }));
       return;
     }
 
@@ -194,7 +141,7 @@ export const RegisterPage = () => {
       // CRITICAL: Verify response structure before proceeding
       if (!response.data) {
         console.error('[RegisterPage] ❌ Response has no data!', response);
-        throw new Error(text.registerFail);
+        throw new Error(t('auth:register_incomplete'));
       }
 
       // Backend returns JSON with: { access_token, refresh_token, token_type, expires_in }
@@ -209,7 +156,7 @@ export const RegisterPage = () => {
           access_tokenType: typeof access_token,
           access_tokenLength: access_token?.length || 0,
         });
-        throw new Error(text.registerFail);
+        throw new Error(t('auth:register_incomplete'));
       }
 
       // Validate refresh_token (optional but recommended)
@@ -228,7 +175,7 @@ export const RegisterPage = () => {
         const verifyAccessToken = localStorage.getItem('token');
         if (!verifyAccessToken) {
           console.error('[RegisterPage] ❌ CRITICAL: Access token was NOT saved to localStorage!');
-          throw new Error(text.storageFail);
+          throw new Error(t('auth:storage_failed'));
         }
       } catch (storageError: any) {
         console.error('[RegisterPage] ❌ Error saving tokens:', storageError);
@@ -237,7 +184,9 @@ export const RegisterPage = () => {
           message: storageError?.message,
           stack: storageError?.stack,
         });
-        throw new Error(`${text.storageFail}: ${storageError?.message || text.unknownError}.`);
+        throw new Error(
+          `${t('auth:storage_failed')}: ${storageError?.message || t('auth:unknown_error')}.`,
+        );
       }
 
       /**
@@ -254,7 +203,7 @@ export const RegisterPage = () => {
       const savedToken = getAccessToken();
       if (!savedToken) {
         console.error('[RegisterPage] Token was not saved to localStorage!');
-        throw new Error(text.registerFail);
+        throw new Error(t('auth:register_incomplete'));
       }
       
       // Verify token with backend and get user info
@@ -264,10 +213,12 @@ export const RegisterPage = () => {
       // In that case, we'll just navigate to dashboard and let ProtectedRoute handle auth
       // Get user info from the registration response if available
       // Otherwise, we'll let ProtectedRoute fetch it
-      const userName = email.split('@')[0] || text.fallbackUser;
+      const userName = email.split('@')[0] || t('auth:fallback_user');
       
-      // הודעת "ברוך הבא" אחרי registration
-      showSuccess(text.welcome(userName));
+      showSuccess(t('auth:welcome_registered', { name: userName }));
+
+      // Same as email login: avoid showing another user's cached React Query data after registering into a new session.
+      queryClient.clear();
       
       // Update global auth state
       window.dispatchEvent(new Event('token-changed'));
@@ -358,7 +309,7 @@ export const RegisterPage = () => {
       }
       
       // Extract error message
-      let errorMessage = text.genericFail;
+      let errorMessage = t('auth:register_failed_generic');
       
       if (err.response) {
         // Server responded with error
@@ -366,13 +317,13 @@ export const RegisterPage = () => {
         if (serverMessage) {
           errorMessage = serverMessage;
         } else if (err.response.status === 500) {
-          errorMessage = text.serverFail;
+          errorMessage = t('auth:server_error_temp');
         } else {
-          errorMessage = text.tempFail;
+          errorMessage = t('auth:temp_error');
         }
       } else if (err.request) {
         // Request was made but no response received
-        errorMessage = text.noResponse;
+        errorMessage = t('auth:no_server_response');
       } else {
         // Something else happened
         errorMessage = err.message || errorMessage;
@@ -387,11 +338,11 @@ export const RegisterPage = () => {
   };
 
   return (
-    <div className="authWrap safe-top safe-bottom" dir={isEnglish ? "ltr" : "rtl"}>
+    <div className="authWrap safe-top safe-bottom" dir={rtl ? 'rtl' : 'ltr'}>
       <div className="wow-card wow-pad wow-fadeIn" style={{ maxWidth: 420, width: "100%", margin: "60px auto" }}>
-        <div className="wow-title" style={{ fontSize: 30, marginBottom: 8 }}>{text.title}</div>
+        <div className="wow-title" style={{ fontSize: 30, marginBottom: 8 }}>{t('auth:register_page_title')}</div>
         <div className="wow-muted">
-          {text.subtitle}
+          {t('auth:register_page_subtitle')}
         </div>
 
         {error && (
@@ -403,7 +354,7 @@ export const RegisterPage = () => {
         <form onSubmit={handleSubmit} className="authForm">
           <div>
             <label htmlFor="email" className="label text-right">
-              {text.email}
+              {t('auth:email')}
             </label>
             <input
               id="email"
@@ -414,13 +365,13 @@ export const RegisterPage = () => {
               onChange={(e) => setEmail(e.target.value)}
               required
               className="input"
-              placeholder="your@email.com"
+              placeholder={t('auth:email_placeholder')}
             />
           </div>
 
           <div>
             <label htmlFor="fullName" className="label text-right">
-              {text.fullName}
+              {t('auth:full_name_optional')}
             </label>
             <input
               id="fullName"
@@ -429,13 +380,13 @@ export const RegisterPage = () => {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className="input"
-              placeholder={text.fullNamePlaceholder}
+              placeholder={t('auth:full_name_placeholder')}
             />
           </div>
 
           <div>
             <label htmlFor="password" className="label text-right">
-              {text.password}
+              {t('auth:password')}
             </label>
             <input
               id="password"
@@ -446,13 +397,13 @@ export const RegisterPage = () => {
               required
               minLength={8}
               className="input"
-              placeholder={text.passwordPlaceholder}
+              placeholder={t('auth:password_placeholder')}
             />
           </div>
 
           <div>
             <label htmlFor="confirmPassword" className="label text-right">
-              {text.confirmPassword}
+              {t('auth:confirm_password')}
             </label>
             <input
               id="confirmPassword"
@@ -463,24 +414,24 @@ export const RegisterPage = () => {
               required
               minLength={8}
               className="input"
-              placeholder={text.confirmPasswordPlaceholder}
+              placeholder={t('auth:confirm_password_placeholder')}
             />
           </div>
 
           <div className="authActions">
             <button type="submit" disabled={loading} className="wow-btn wow-btnPrimary touch-target">
-              {loading ? text.registering : text.register}
+              {loading ? t('auth:registering') : t('auth:register')}
             </button>
             <button type="button" onClick={handleGoogleLogin} className="wow-btn">
-              {text.google}
+              {t('auth:continue_with_google')}
             </button>
           </div>
         </form>
 
         <div className="authFooter">
-          {text.haveAccount}{' '}
+          {t('auth:already_have_account')}{' '}
           <Link to={ROUTES.LOGIN}>
-            {text.login}
+            {t('auth:sign_in_link')}
           </Link>
         </div>
       </div>

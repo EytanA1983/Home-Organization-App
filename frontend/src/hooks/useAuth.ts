@@ -28,7 +28,7 @@ export const useAuth = () => {
       const token = getAccessToken();
       const hasToken = !!token;
 
-      console.log('[useAuth] Checking authentication:', {
+      smokeDebug("useAuth:check", {
         hasToken,
         tokenLength: token?.length || 0,
       });
@@ -45,7 +45,7 @@ export const useAuth = () => {
       try {
         const response = await fetchMe();
         if (response.status === 200 && response.data) {
-          console.log('[useAuth] ✅ Token verified, user authenticated:', {
+          smokeDebug("useAuth:verified", {
             userId: response.data.id,
             email: response.data.email,
           });
@@ -79,14 +79,14 @@ export const useAuth = () => {
     // Listen for storage changes (cross-tab)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'token' || e.key === 'refresh_token') {
-        console.log('[useAuth] Token changed in localStorage, rechecking...');
+        smokeDebug("useAuth:storage_token_change", { key: e.key ?? "" });
         checkAuth();
       }
     };
 
     // Listen for custom event (same-tab)
     const handleTokenChange = () => {
-      console.log('[useAuth] Token change event received, rechecking...');
+      smokeDebug("useAuth:token_changed_event", {});
       setTimeout(() => {
         checkAuth();
       }, 100);

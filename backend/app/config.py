@@ -246,7 +246,8 @@ class Settings(BaseSettings):
         description="Google OAuth Client Secret - SENSITIVE"
     )
     GOOGLE_REDIRECT_URI: str = Field(
-        default="http://localhost:8000/api/google-calendar/callback"
+        default="http://localhost:8000/api/auth/google/callback",
+        description="Must match Google Cloud Console “Authorized redirect URIs” and auth router path /api/auth/google/callback",
     )
     GOOGLE_OAUTH_USE_PKCE: bool = Field(
         default=True,
@@ -592,7 +593,7 @@ def get_settings() -> Settings:
     """
     # Debug: Check .env file before creating Settings
     env_file_path = Path(__file__).parent.parent / ".env"
-    print(f"[CONFIG] 🔍 Loading settings...")
+    print(f"[CONFIG] Loading settings...")
     print(f"[CONFIG]    .env file path: {env_file_path.absolute()}")
     print(f"[CONFIG]    .env file exists: {env_file_path.exists()}")
     if env_file_path.exists():
@@ -616,9 +617,9 @@ def get_settings() -> Settings:
                         print(f"[CONFIG]    SECRET_KEY value (first 20 chars): {key_value[:20]}...")
                         break
         except Exception as e:
-            print(f"[CONFIG]    ⚠️  Error reading .env file: {e}")
+            print(f"[CONFIG]    [WARN] Error reading .env file: {e}")
     else:
-        print(f"[CONFIG]    ⚠️  WARNING: .env file not found!")
+        print(f"[CONFIG]    [WARN] WARNING: .env file not found!")
         print(f"[CONFIG]    Current working directory: {Path.cwd()}")
         print(f"[CONFIG]    Config file location: {Path(__file__).parent}")
     
@@ -637,7 +638,7 @@ def get_settings() -> Settings:
                 "Please set SECRET_KEY in your .env file or environment variable. "
                 "Example: SECRET_KEY=<strong-random-32-chars-minimum>"
             )
-            print(f"[CONFIG] ❌ ERROR: {error_msg}")
+            print(f"[CONFIG] [ERROR] ERROR: {error_msg}")
             raise ValueError(error_msg)
         
         if not settings_instance.DATABASE_URL or settings_instance.DATABASE_URL == "sqlite:///./dev.db" or "sqlite" in settings_instance.DATABASE_URL.lower():
@@ -646,11 +647,11 @@ def get_settings() -> Settings:
                 "Please set DATABASE_URL to a production database (PostgreSQL). "
                 "Example: DATABASE_URL=postgresql+psycopg://user:pass@db:5432/app"
             )
-            print(f"[CONFIG] ❌ ERROR: {error_msg}")
+            print(f"[CONFIG] [ERROR] ERROR: {error_msg}")
             raise ValueError(error_msg)
     
     # Log successful configuration (without exposing secrets)
-    print(f"[CONFIG] ✅ Configuration loaded successfully")
+    print(f"[CONFIG] [OK] Configuration loaded successfully")
     print(f"[CONFIG]   Environment: {env} ({'PRODUCTION' if is_production else 'DEVELOPMENT'})")
     print(f"[CONFIG]   SECRET_KEY: {'SET' if settings_instance.SECRET_KEY else 'NOT SET'} ({len(settings_instance.SECRET_KEY)} chars)")
     print(f"[CONFIG]   DATABASE_URL: {'SET' if settings_instance.DATABASE_URL else 'NOT SET'} ({settings_instance.DATABASE_URL[:30] + '...' if settings_instance.DATABASE_URL else 'N/A'})")
@@ -667,7 +668,7 @@ try:
 except ValueError as e:
     # Log the error and re-raise
     import sys
-    print(f"[CONFIG] ❌ Failed to load settings: {e}", file=sys.stderr)
+    print(f"[CONFIG] [ERROR] Failed to load settings: {e}", file=sys.stderr)
     raise
 
 

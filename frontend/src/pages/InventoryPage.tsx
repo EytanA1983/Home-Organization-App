@@ -1,46 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { InventoryAreaRead, InventoryItemRead } from "../schemas/inventory";
 import { showError, showSuccess } from "../utils/toast";
 import { useTranslation } from "react-i18next";
 import { ROUTES } from "../utils/routes";
+import { isRtlLang } from "../utils/localeDirection";
+import { inventoryPhotoSrc } from "../utils/inventoryImageUrl";
 
 export default function InventoryPage() {
-  const { i18n } = useTranslation();
+  const { t } = useTranslation("inventory");
   const { t: tl } = useTranslation("layout");
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const text = isEnglish
-    ? {
-        title: "Supplies & home catalog",
-        subtitle: "Track quantities and photos by storage zone — optional alongside categories.",
-        areaName: "Area name",
-        areaPlaceholder: "e.g. Wardrobe",
-        addArea: "Add area",
-        itemName: "Item name",
-        itemPlaceholder: "e.g. T-shirts",
-        quantity: "Quantity",
-        photoUrl: "Photo URL",
-        markDonated: "Mark as donated",
-        addItem: "Add item",
-        noAreas: "No areas yet. Add your first area.",
-        noItems: "No items in this area yet.",
-      }
-    : {
-        title: "אספקה וקטלוג בית",
-        subtitle: "מעקב כמויות ותמונות לפי אזור אחסון — משלים את הקטגוריות.",
-        areaName: "שם אזור",
-        areaPlaceholder: "לדוגמה: ארון בגדים",
-        addArea: "הוספת אזור",
-        itemName: "שם פריט",
-        itemPlaceholder: "לדוגמה: חולצות",
-        quantity: "כמות",
-        photoUrl: "קישור לתמונה",
-        markDonated: "סמני כנתרם",
-        addItem: "הוספת פריט",
-        noAreas: "אין עדיין אזורים. הוסיפי אזור ראשון.",
-        noItems: "אין פריטים באזור זה עדיין.",
-      };
+  const { t: tCommon } = useTranslation("common");
+  const { i18n } = useTranslation();
+  const dirAttr = isRtlLang(i18n.language) ? "rtl" : "ltr";
 
   const [areas, setAreas] = useState<InventoryAreaRead[]>([]);
   const [items, setItems] = useState<InventoryItemRead[]>([]);
@@ -51,59 +24,36 @@ export default function InventoryPage() {
   const [quantity, setQuantity] = useState(1);
   const [photoUrl, setPhotoUrl] = useState("");
   const [isDonated, setIsDonated] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedItems = useMemo(
-    () => items.filter((it) => (selectedAreaId ? it.area_id === selectedAreaId : true)),
-    [items, selectedAreaId]
-  );
+  const selectedItems = useMemo(() => {
+    if (selectedAreaId == null) return [];
+    return items.filter((it) => it.area_id === selectedAreaId);
+  }, [items, selectedAreaId]);
 
-  const loadData = async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const [areasRes, itemsRes] = await Promise.all([
-        api.get<InventoryAreaRead[]>("/inventory/areas").catch((err) => {
-          // If 404, return empty array (no areas yet)
-          if (err?.response?.status === 404) {
-            return { data: [] };
-          }
-          throw err;
-        }),
-        api.get<InventoryItemRead[]>("/inventory/items").catch((err) => {
-          // If 404, return empty array (no items yet)
-          if (err?.response?.status === 404) {
-            return { data: [] };
-          }
-          throw err;
-        }),
+      const [{ data: a }, { data: i }] = await Promise.all([
+        api.get<InventoryAreaRead[]>("/inventory/areas"),
+        api.get<InventoryItemRead[]>("/inventory/items"),
       ]);
-      setAreas(areasRes.data || []);
-      setItems(itemsRes.data || []);
-      if (!selectedAreaId && (areasRes.data || []).length > 0) {
-        setSelectedAreaId(areasRes.data[0].id);
+      setAreas(a || []);
+      setItems(i || []);
+      if (selectedAreaId == null && (a || []).length > 0) {
+        setSelectedAreaId(a![0].id);
       }
-    } catch (e: any) {
-      const status = e?.response?.status;
-      const isNetworkError = e?.code === 'ERR_NETWORK' || e?.code === 'ERR_FAILED';
-      
-      if (isNetworkError) {
-        showError(isEnglish 
-          ? "Cannot connect to server. Please check if the backend is running on http://localhost:8000"
-          : "לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ על http://localhost:8000"
-        );
-      } else if (status === 404) {
-        // 404 is OK - just means no data yet
-        setAreas([]);
-        setItems([]);
-      } else {
-        showError(e?.response?.data?.detail ?? (isEnglish ? "Failed to load inventory" : "שגיאה בטעינת הקטלוג"));
-      }
+    } catch {
+      setAreas([]);
+      setItems([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadData();
+    void load();
   }, []);
 
   const createArea = async (e: React.FormEvent) => {
@@ -111,18 +61,65 @@ export default function InventoryPage() {
     if (!areaName.trim()) return;
     try {
       const { data } = await api.post<InventoryAreaRead>("/inventory/areas", { name: areaName.trim() });
-      setAreaName("");
-      setAreas((prev) => [data, ...prev]);
+      setAreas((prev) => [...prev, data]);
       setSelectedAreaId(data.id);
-      showSuccess(isEnglish ? "Area created" : "האזור נוצר");
-    } catch (err: any) {
-      showError(err?.response?.data?.detail ?? (isEnglish ? "Failed to create area" : "שגיאה ביצירת אזור"));
+      setAreaName("");
+    } catch (err: unknown) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+      showError(detail ?? tCommon("error"));
     }
+  };
+
+  const handlePhotoFile = async (file: File | undefined | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showError(t("photoUploadTypeError"));
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post<{ url: string }>("/inventory/upload-photo", fd);
+      if (data?.url) {
+        setPhotoUrl(data.url);
+        showSuccess(t("photoUploadSuccess"));
+      }
+    } catch (err: unknown) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+      showError(typeof detail === "string" ? detail : t("photoUploadFailed"));
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const openFilePicker = (mode: "gallery" | "camera") => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    if (mode === "camera") {
+      el.setAttribute("capture", "environment");
+    } else {
+      el.removeAttribute("capture");
+    }
+    el.click();
+  };
+
+  const onFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    e.target.removeAttribute("capture");
+    await handlePhotoFile(f);
   };
 
   const createItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAreaId || !itemName.trim()) return;
+    if (!itemName.trim() || selectedAreaId == null) return;
     try {
       const { data } = await api.post<InventoryItemRead>("/inventory/items", {
         area_id: selectedAreaId,
@@ -136,17 +133,23 @@ export default function InventoryPage() {
       setQuantity(1);
       setPhotoUrl("");
       setIsDonated(false);
-      showSuccess(isEnglish ? "Item added" : "הפריט נוסף");
-    } catch (err: any) {
-      showError(err?.response?.data?.detail ?? (isEnglish ? "Failed to add item" : "שגיאה בהוספת פריט"));
+      showSuccess(t("itemAdded"));
+    } catch (err: unknown) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+      showError(detail ?? t("itemAddFailed"));
     }
   };
 
+  const previewSrc = inventoryPhotoSrc(photoUrl);
+
   return (
-    <main className="pageContent" dir={isEnglish ? "ltr" : "rtl"} style={{ display: "grid", gap: 20 }}>
+    <main className="pageContent" dir={dirAttr} style={{ display: "grid", gap: 20 }}>
       <section className="lifestyle-card">
-        <div className="lifestyle-title">{text.title}</div>
-        <div className="lifestyle-muted">{text.subtitle}</div>
+        <div className="lifestyle-title">{t("title")}</div>
+        <div className="lifestyle-muted">{t("subtitle")}</div>
         <p className="wow-muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
           {tl("inventoryKicker")}{" "}
           <Link to={ROUTES.CATEGORIES} className="wow-btn" style={{ display: "inline-flex", padding: "2px 10px", fontSize: "0.85rem" }}>
@@ -157,16 +160,20 @@ export default function InventoryPage() {
 
       <section className="lifestyle-card">
         <form onSubmit={createArea} style={{ display: "grid", gap: 8 }}>
-          <label className="label">{text.areaName}</label>
-          <input className="input" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={text.areaPlaceholder} />
-          <button className="wow-btn wow-btnPrimary" type="submit">{text.addArea}</button>
+          <label className="label">{t("areaName")}</label>
+          <input className="input" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={t("areaPlaceholder")} />
+          <button className="wow-btn wow-btnPrimary" type="submit">
+            {t("addArea")}
+          </button>
         </form>
       </section>
 
       {loading ? (
         <div className="wow-skeleton" style={{ height: 100 }} />
       ) : areas.length === 0 ? (
-        <section className="lifestyle-card"><p className="wow-muted">{text.noAreas}</p></section>
+        <section className="lifestyle-card">
+          <p className="wow-muted">{t("noAreas")}</p>
+        </section>
       ) : (
         <>
           <section className="lifestyle-card" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
@@ -183,32 +190,107 @@ export default function InventoryPage() {
           </section>
 
           <section className="lifestyle-card">
+            <div className="lifestyle-title" style={{ fontSize: 18, marginBottom: 4 }}>
+              {t("addHomeItemToInventory")}
+            </div>
+            <div className="lifestyle-muted" style={{ marginBottom: 12 }}>
+              {t("addItemFormHint")}
+            </div>
             <form onSubmit={createItem} style={{ display: "grid", gap: 8 }}>
-              <label className="label">{text.itemName}</label>
-              <input className="input" value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder={text.itemPlaceholder} />
-              <label className="label">{text.quantity}</label>
+              <label className="label">{t("itemName")}</label>
+              <input className="input" value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder={t("itemPlaceholder")} />
+              <label className="label">{t("quantity")}</label>
               <input className="input" type="number" min={0} value={quantity} onChange={(e) => setQuantity(Number(e.target.value || 0))} />
-              <label className="label">{text.photoUrl}</label>
-              <input className="input" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="https://..." />
+
+              <div style={{ marginTop: 4 }}>
+                <div className="label" style={{ marginBottom: 6 }}>
+                  {t("photoSectionTitle")}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                  style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }}
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={onFileInputChange}
+                />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="wow-btn touch-target"
+                    disabled={photoUploading}
+                    onClick={() => openFilePicker("gallery")}
+                  >
+                    {photoUploading ? t("photoUploading") : t("photoUploadFromDevice")}
+                  </button>
+                  <button
+                    type="button"
+                    className="wow-btn touch-target"
+                    disabled={photoUploading}
+                    onClick={() => openFilePicker("camera")}
+                  >
+                    {t("photoUseCamera")}
+                  </button>
+                  {photoUrl ? (
+                    <button type="button" className="wow-btn" onClick={() => setPhotoUrl("")}>
+                      {t("photoClear")}
+                    </button>
+                  ) : null}
+                </div>
+                <p className="wow-muted" style={{ marginTop: 8, fontSize: "0.9rem" }}>
+                  {t("photoUrlHint")}
+                </p>
+              </div>
+
+              <label className="label">{t("photoUrl")}</label>
+              <input
+                className="input"
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+                placeholder="https://..."
+                dir="ltr"
+              />
+
+              {previewSrc ? (
+                <div style={{ marginTop: 4 }}>
+                  <img
+                    src={previewSrc}
+                    alt=""
+                    style={{ maxWidth: "min(100%, 280px)", maxHeight: 220, borderRadius: 12, objectFit: "cover", border: "1px solid var(--border)" }}
+                  />
+                </div>
+              ) : null}
+
               <label className="label" style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input type="checkbox" checked={isDonated} onChange={(e) => setIsDonated(e.target.checked)} />
-                {text.markDonated}
+                {t("markDonated")}
               </label>
-              <button className="wow-btn wow-btnPrimary" type="submit">{text.addItem}</button>
+              <button className="wow-btn wow-btnPrimary" type="submit">
+                {t("addHomeItemToInventory")}
+              </button>
             </form>
           </section>
 
           <section className="lifestyle-card" style={{ display: "grid", gap: 10 }}>
             {selectedItems.length === 0 ? (
-              <p className="wow-muted">{text.noItems}</p>
+              <p className="wow-muted">{t("noItems")}</p>
             ) : (
               selectedItems.map((it) => (
                 <article key={it.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 10 }}>
-                  <div style={{ fontWeight: 600 }}>{it.name} {it.is_donated ? "✅" : ""}</div>
-                  <div className="wow-muted">{text.quantity}: {it.quantity}</div>
-                  {it.photo_url && (
-                    <img src={it.photo_url} alt={it.name} style={{ width: 120, marginTop: 8, borderRadius: 8 }} />
-                  )}
+                  <div style={{ fontWeight: 600 }}>
+                    {it.name} {it.is_donated ? "✅" : ""}
+                  </div>
+                  <div className="wow-muted">
+                    {t("quantity")}: {it.quantity}
+                  </div>
+                  {it.photo_url ? (
+                    <img
+                      src={inventoryPhotoSrc(it.photo_url)}
+                      alt={it.name}
+                      style={{ width: 120, marginTop: 8, borderRadius: 8, objectFit: "cover" }}
+                    />
+                  ) : null}
                 </article>
               ))
             )}

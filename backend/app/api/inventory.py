@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import List, Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -15,9 +18,76 @@ from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemRead,
     InventoryItemUpdate,
+    InventoryPhotoUploadResponse,
 )
 
+logger = logging.getLogger("app")
+
+# backend/static (same root main.py uses for StaticFiles)
+_STATIC_ROOT = Path(__file__).resolve().parents[2] / "static"
+_UPLOADS_ROOT = _STATIC_ROOT / "uploads" / "inventory"
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
+_ALLOWED_IMAGE_TYPES: dict[str, str] = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
+
+
+@router.post("/upload-photo", response_model=InventoryPhotoUploadResponse)
+async def upload_inventory_photo(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """
+    Upload an image from desktop / phone / tablet (multipart).
+    Stored under `/static/uploads/inventory/{user_id}/` and returned as a path for `photo_url`.
+    """
+    raw_ct = (file.content_type or "").split(";")[0].strip().lower()
+    ext = _ALLOWED_IMAGE_TYPES.get(raw_ct)
+    if not ext:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type. Use JPEG, PNG, WebP, or GIF.",
+        )
+
+    user_dir = _UPLOADS_ROOT / str(user.id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    name = f"{uuid4().hex}{ext}"
+    dest = user_dir / name
+
+    size = 0
+    try:
+        with dest.open("wb") as out:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > _MAX_IMAGE_BYTES:
+                    dest.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="File too large (max 5 MB).",
+                    )
+                out.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        dest.unlink(missing_ok=True)
+        logger.exception("inventory upload failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not save upload.",
+        ) from e
+
+    public_path = f"/static/uploads/inventory/{user.id}/{name}"
+    return InventoryPhotoUploadResponse(url=public_path)
 
 
 @router.get("/areas", response_model=List[InventoryAreaRead])

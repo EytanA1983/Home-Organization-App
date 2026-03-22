@@ -11,14 +11,11 @@ interface ModalProps {
 }
 
 export const Modal = ({ children, onClose, title, description, isOpen = true }: ModalProps) => {
-  const { i18n } = useTranslation();
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
-  const modalTitle = title ?? (isEnglish ? "Choose one small task and keep moving" : "בוחרות משימה אחת וממשיכות בקטנה");
-  const defaultSubtitle = isEnglish
-    ? "Calm home = calm mind. Just 5 more focused minutes."
-    : "שקט בבית = שקט בראש. רק עוד 5 דקות וסיימנו.";
+  const { t } = useTranslation("common");
+  const modalTitle = title ?? t("modal_default_title");
+  const defaultSubtitle = t("modal_default_subtitle");
   const modalSubtitle = description === undefined ? defaultSubtitle : description;
-  const closeLabel = isEnglish ? "Close" : "סגור";
+  const closeLabel = t("close");
 
   // Close on ESC key
   useEffect(() => {

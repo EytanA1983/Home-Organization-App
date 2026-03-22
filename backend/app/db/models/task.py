@@ -1,12 +1,17 @@
 """Task model with recurrence support"""
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional, List
 import enum
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 from app.db.base import Base
+
+def _utc_now() -> datetime:
+    """Timezone-aware UTC for inserts/updates when DB defaults are missing (e.g. SQLite)."""
+    return datetime.now(timezone.utc)
+
 
 if TYPE_CHECKING:
     from app.db.models.category import Category
@@ -91,10 +96,11 @@ class Task(Base):
 
     # History
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
+        DateTime(timezone=True),
         server_default=func.now(),
+        default=_utc_now,
         nullable=False,
-        index=True
+        index=True,
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     before_image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -102,10 +108,11 @@ class Task(Base):
     before_image_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     after_image_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
+        DateTime(timezone=True),
         server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False
+        default=_utc_now,
+        onupdate=_utc_now,
+        nullable=False,
     )
 
     # Relationships

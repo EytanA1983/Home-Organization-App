@@ -10,6 +10,8 @@ interface UseTasksParams {
 
 interface UseTasksOptions {
   enabled?: boolean;
+  /** Force refetch when screen remounts (e.g. after login) — global default is refetchOnWindowFocus: false. */
+  refetchOnMount?: boolean | 'always';
 }
 
 export const useTasks = (params?: UseTasksParams, options?: UseTasksOptions) => {
@@ -18,6 +20,7 @@ export const useTasks = (params?: UseTasksParams, options?: UseTasksOptions) => 
 
   return useQuery({
     queryKey: ['tasks', params],
+    refetchOnMount: options?.refetchOnMount,
     queryFn: async () => {
       // Convert roomId to room_id for API
       const apiParams: any = {};

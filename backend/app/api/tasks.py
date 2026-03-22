@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from app.db.session import get_db
 from app.db.models import Task, Recurrence, User
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.schemas.task import TaskCreate, TaskRead, TaskUpdate, TaskTitleSuggestions
 from app.schemas.todo import TodoRead
 from app.api.deps import get_current_user
 from app.api.deps_audit import get_audit_context
@@ -19,6 +19,27 @@ from app.core.cache import invalidate_user_cache, cache_get, cache_set, make_cac
 from app.services.tasks import get_today_tasks
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+
+
+def _calendar_date_of(value: datetime | date | None) -> date | None:
+    """Calendar date for due_date validation (datetime first — datetime subclasses date)."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def assert_due_date_not_in_past(due: datetime | date | None) -> None:
+    """Business rule: due date must be today or future (local server calendar)."""
+    d = _calendar_date_of(due)
+    if d is None:
+        return
+    if d < date.today():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="תאריך היעד לא יכול להיות בעבר. בחרו מתאריך היום ואילך.",
+        )
 
 @router.get("", response_model=List[TaskRead])
 def list_tasks(
@@ -178,6 +199,43 @@ def read_weekly_tasks(
     from app.services.tasks import get_weekly_tasks
     return get_weekly_tasks(db, user.id)
 
+
+@router.get("/title-suggestions", response_model=TaskTitleSuggestions)
+def list_task_title_suggestions(
+    prefix: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Distinct titles from this user's tasks (all rooms/categories) where the title
+    starts with `prefix`. Prefix length must be 1–3 characters (codepoints).
+    Used by Add Task: narrow the list as the user types the first letters.
+    """
+    p = (prefix or "").strip()
+    if len(p) < 1 or len(p) > 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="prefix must be between 1 and 3 characters",
+        )
+    # Escape LIKE wildcards
+    escaped = p.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"{escaped}%"
+
+    rows = (
+        db.query(Task.title)
+        .filter(Task.user_id == user.id)
+        .filter(Task.title.isnot(None))
+        .filter(Task.title != "")
+        .filter(Task.title.like(pattern, escape="\\"))
+        .distinct()
+        .order_by(Task.title.asc())
+        .limit(50)
+        .all()
+    )
+    titles = [row[0] for row in rows if row[0]]
+    return TaskTitleSuggestions(titles=titles)
+
+
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 def create_task(
     request: Request,
@@ -207,6 +265,8 @@ def create_task(
         # Set due_date from rrule_start_date if not provided
         if not task_data.get("due_date") and task_data.get("rrule_start_date"):
             task_data["due_date"] = task_data["rrule_start_date"]
+
+    assert_due_date_not_in_past(task_data.get("due_date"))
 
     task = Task(**task_data, user_id=user.id)
     db.add(task)

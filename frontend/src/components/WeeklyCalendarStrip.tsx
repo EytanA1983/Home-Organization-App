@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./WeeklyCalendarStrip.module.css";
 import type { Task } from "../app/types";
 import { useTranslation } from "react-i18next";
-import { apiHeOrEn, isRtlLang } from "../utils/localeDirection";
+import { apiHeOrEn, intlLocaleForLang, isRtlLang } from "../utils/localeDirection";
 
 const HEB_DAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
-const EN_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function startOfWeekIsrael(d: Date) {
   const date = new Date(d);
@@ -163,9 +162,9 @@ export default function WeeklyCalendarStrip({
   defaultDurationMin?: number;
 }) {
   const { i18n } = useTranslation();
-  const useHebrewUi = apiHeOrEn(i18n.language) === "he";
-  const locale = useHebrewUi ? "he-IL" : "en-US";
-  const dayLabels = useHebrewUi ? HEB_DAYS : EN_DAYS;
+  const { t: tCal } = useTranslation("calendar");
+  const useHebrewLetters = apiHeOrEn(i18n.language) === "he";
+  const localeTag = intlLocaleForLang(i18n.language);
   const dirAttr = isRtlLang(i18n.language) ? "rtl" : "ltr";
   const now = new Date();
   const weekStart = startOfWeekIsrael(now);
@@ -181,13 +180,16 @@ export default function WeeklyCalendarStrip({
     () =>
       Array.from({ length: 7 }, (_, i) => {
         const date = addDays(weekStart, i);
+        const label = useHebrewLetters
+          ? HEB_DAYS[i]
+          : date.toLocaleDateString(localeTag, { weekday: "short" });
         return {
           key: `d${i}`,
-          label: dayLabels[i],
+          label,
           date,
         };
       }),
-    [dayLabels, weekStart]
+    [localeTag, useHebrewLetters, weekStart]
   );
 
   const minutesWindow = (dayEndHour - dayStartHour) * 60;
@@ -296,12 +298,14 @@ export default function WeeklyCalendarStrip({
     <section
       className={styles.gcCard}
       dir={dirAttr}
-      aria-label={useHebrewUi ? "תצוגת שבוע בסגנון Google Calendar" : "Google Calendar style weekly view"}
+      aria-label={tCal("weekStripViewAria")}
     >
       <div className={styles.gcHeader}>
         <div className={styles.gcHeaderTop}>
           <div>
-            <div className={styles.gcTitle}>{viewMode === "weekly" ? (useHebrewUi ? "השבוע שלך" : "Your week") : (useHebrewUi ? "היום שלך" : "Your day")}</div>
+            <div className={styles.gcTitle}>
+              {viewMode === "weekly" ? tCal("weekStripYourWeek") : tCal("weekStripYourDay")}
+            </div>
           </div>
           <div className={styles.gcControls}>
             <div className={styles.gcSegmented}>
@@ -310,14 +314,14 @@ export default function WeeklyCalendarStrip({
                 className={`${styles.gcSegmentBtn} ${viewMode === "daily" ? styles.gcSegmentBtnActive : ""}`}
                 onClick={() => setViewMode("daily")}
               >
-                {useHebrewUi ? "יומי" : "Daily"}
+                {tCal("weekStripDaily")}
               </button>
               <button
                 type="button"
                 className={`${styles.gcSegmentBtn} ${viewMode === "weekly" ? styles.gcSegmentBtnActive : ""}`}
                 onClick={() => setViewMode("weekly")}
               >
-                {useHebrewUi ? "שבועי" : "Weekly"}
+                {tCal("weekStripWeekly")}
               </button>
             </div>
             {viewMode === "daily" && (
@@ -326,16 +330,16 @@ export default function WeeklyCalendarStrip({
                   type="button"
                   className={styles.gcDayNavBtn}
                   onClick={() => setActiveDayIndex((prev) => (prev + 6) % 7)}
-                  aria-label={useHebrewUi ? "יום קודם" : "Previous day"}
+                  aria-label={tCal("weekStripPrevDay")}
                 >
                   ◀
                 </button>
-                <span className={styles.gcDayNavLabel}>{dayLabels[activeDayIndex]}</span>
+                <span className={styles.gcDayNavLabel}>{days[activeDayIndex]?.label ?? ""}</span>
                 <button
                   type="button"
                   className={styles.gcDayNavBtn}
                   onClick={() => setActiveDayIndex((prev) => (prev + 1) % 7)}
-                  aria-label={useHebrewUi ? "יום הבא" : "Next day"}
+                  aria-label={tCal("weekStripNextDay")}
                 >
                   ▶
                 </button>
@@ -357,7 +361,7 @@ export default function WeeklyCalendarStrip({
             <div key={d.key} className={`${styles.gcDayHead} ${idx === todayIndex ? styles.gcDayHeadToday : ""}`}>
               <div className={styles.gcDayName}>{d.label}</div>
               <div className={styles.gcDayDate}>
-                {d.date.toLocaleDateString(locale, { day: "numeric", month: "numeric" })}
+                {d.date.toLocaleDateString(localeTag, { day: "numeric", month: "numeric" })}
               </div>
             </div>
           );})}
@@ -426,8 +430,8 @@ export default function WeeklyCalendarStrip({
                             e.stopPropagation();
                             onToggleComplete?.(t.originalId);
                           }}
-                          aria-label={t.completed ? (useHebrewUi ? "בטל סימון" : "Unmark completed") : (useHebrewUi ? "סמן כבוצע" : "Mark completed")}
-                          title={t.completed ? (useHebrewUi ? "בוצע" : "Completed") : (useHebrewUi ? "סמן כבוצע" : "Mark completed")}
+                          aria-label={t.completed ? tCal("weekStripUnmark") : tCal("weekStripMarkDone")}
+                          title={t.completed ? tCal("weekStripCompletedBadge") : tCal("weekStripMarkDone")}
                         >
                           {t.completed ? "✓" : ""}
                         </button>

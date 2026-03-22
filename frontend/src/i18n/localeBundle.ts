@@ -58,5 +58,7 @@ export function bundleLocale(raw: any) {
     emptyStates: raw.emptyStates ?? {},
     errors: raw.errors ?? {},
     home: raw.home ?? {},
+    inventory: raw.inventory ?? {},
+    visionSchedule: raw.visionSchedule ?? {},
   };
 }

@@ -1261,7 +1261,27 @@ def google_login(request: Request):
     Required for production security.
     """
     from app.core.pkce import generate_pkce_pair, store_pkce_state
-    import secrets
+
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
+    client_secret = (settings.GOOGLE_CLIENT_SECRET or "").strip()
+    if not client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Google OAuth is not configured on the server: missing GOOGLE_CLIENT_ID. "
+                "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI in the backend .env "
+                "(see backend/docs/google-oauth-pkce.md). Redirect URI must be e.g. "
+                "http://localhost:8000/api/auth/google/callback and match Google Cloud Console."
+            ),
+        )
+    if not client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Google OAuth is not configured on the server: missing GOOGLE_CLIENT_SECRET. "
+                "Set it in the backend environment (same place as GOOGLE_CLIENT_ID)."
+            ),
+        )
 
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
@@ -1280,7 +1300,7 @@ def google_login(request: Request):
     # Build OAuth2 authorization URL
     google_auth_base = "https://accounts.google.com/o/oauth2/v2/auth"
     params = {
-        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_id": client_id,
         "response_type": "code",
         "scope": "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,

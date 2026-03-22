@@ -1,48 +1,66 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { apiHeOrEn, isRtlLang, pickBilingual } from "../utils/localeDirection";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import BeforeAfterTimeline from "../components/BeforeAfterTimeline";
+import { isRtlLang, pickBilingual } from "../utils/localeDirection";
+import {
+  addDaysLocal,
+  addDaysToDateKey,
+  buildLocalSundayWeekDateKeys,
+  formatDashboardLongDate,
+  formatDashboardLongDateFromYmd,
+  formatDashboardWeekdayShort,
+  formatDashboardWeekdayShortFromYmd,
+  formatLocalDateKey,
+  parseDateKeyLocal,
+} from "../utils/dashboardWeekFormat";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import DashboardCategoryProgress from "../components/DashboardCategoryProgress";
 import DashboardWeekBar from "../components/DashboardWeekBar";
 import DashboardDailyTaskCard from "../components/DashboardDailyTaskCard";
-import { filterPendingTasksForSelectedDay } from "../utils/dashboardScheduledTasks";
-import { getDashboardTaskCategoryLabel } from "../utils/dashboardRoomLabel";
+import { Modal } from "../components/Modal";
+import { stripExpiredTaskDeferrals, taskScheduledOnDateKey } from "../utils/dashboardScheduledTasks";
+import {
+  DASHBOARD_DAILY_BUCKET_CAP,
+  DASHBOARD_MONTHLY_BUCKET_CAP,
+  reconcileVisibleTaskIds,
+  sortEligiblePendingForDayBucketsForDateKey,
+} from "../utils/dashboardRolling";
+import {
+  appendLibraryRefillToEligible,
+  isLibraryDashboardTaskId,
+  libraryCompletedTaskSnapshot,
+  type DashboardLibrarySchedule,
+} from "../utils/dashboardTaskLibraryRefill";
+import {
+  DASHBOARD_UI_STORAGE_VERSION,
+  loadDashboardUiState,
+  saveDashboardUiState,
+} from "../utils/dashboardUiPersistence";
+import { getDashboardTaskCategoryLabel } from "../utils/dashboardTaskCategoryLabel";
 import "../styles/dashboard-daily.css";
 import { Task } from "../app/types";
-import api, { fetchMe, getDailyReset, getDailyInspiration, getDailyTip, getProgressSummary } from '../api.ts';
+import api, { fetchMe } from '../api.ts';
+import {
+  DASHBOARD_QUERY_STALE_MS,
+  fetchDashboardProgressWeek,
+  fetchDashboardTasksFullList,
+} from "../api/dashboardBootstrap";
 import { clearTokens, hasTokens } from '../utils/tokenStorage';
 import { ROUTES } from '../utils/routes';
-import { showError } from '../utils/toast';
-import { DailyFocusRead, DailyFocusCompleteIn, DailyFocusRefreshIn } from '../schemas/daily_focus';
+import { showSuccess } from "../utils/toast";
+import { smokeDebug } from "../utils/smokeDebug";
 import type { ProgressSummaryRead } from '../schemas/progress';
-import type { DailyInspirationRead, DailyTipRead } from '../schemas/dashboard';
+import type { GoogleDashboardCalendarAnchor } from "../schemas/googleCalendarAnchor";
+import type { TaskRead } from "../schemas/task";
+import { mapTaskReadToDashboardTask } from "../utils/mapTaskReadToDashboardTask";
 
-type RecommendedVideo = {
-  videoId: string | null;
-  title: string | null;
-  url: string | null;
-  thumbnail: string | null;
-};
+/** Featured YouTube clip on the dashboard (card links to watch on YouTube). */
+const DASHBOARD_FEATURED_YOUTUBE_VIDEO_ID = "ukfcLL56QYE";
 
-type DashboardRoom = {
-  id: string;
-  /** Key under `rooms.room_types.*` */
-  roomTypeKey: "living" | "kitchen" | "bedroom" | "closet";
-  emoji: string;
-};
-
-const extractYouTubeId = (url?: string | null): string | null => {
-  if (!url) return null;
-  const match = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{6,})/
-  );
-  return match?.[1] ?? null;
-};
-
-const triggerProgressRefresh = () => {
-  // Stage 2 hook: consumers can listen to this event and refresh progress widgets.
-  window.dispatchEvent(new CustomEvent("daily-focus:completed"));
+const dashboardPerfDebug = (label: string, startedAt: number) => {
+  if (!import.meta.env.DEV) return;
+  const ms = Math.round(performance.now() - startedAt);
+  console.debug(`[dashboard:perf] ${label} +${ms}ms`);
 };
 
 const DEMO_TASK_TITLES: Record<string, { he: string; en: string }> = {
@@ -171,9 +189,11 @@ const buildInitialDemoTasks = (lang: string | undefined): Task[] => {
   return localizeDemoTaskTitles(initialTasks, lang);
 };
 
+/** Per-user local demo task list (legacy global key was `tasks`). */
+const demoTasksStorageKey = (userId: number) => `dashboard_demo_tasks_${userId}`;
+
 export default function Dashboard() {
   const { t: td, i18n } = useTranslation("dashboard");
-  const { t: tc } = useTranslation("challenge");
   const { t: tRooms } = useTranslation("rooms");
   const { t: tPc } = useTranslation("productCategories");
   const dirAttr = isRtlLang(i18n.language) ? "rtl" : "ltr";
@@ -185,72 +205,68 @@ export default function Dashboard() {
   const [selectedDayIndex, setSelectedDayIndex] = useState(() => new Date().getDay());
   /** Task id string currently playing the completion exit animation */
   const [exitingTaskId, setExitingTaskId] = useState<string | null>(null);
-  const [recommendedVideo, setRecommendedVideo] = useState<RecommendedVideo | null>(null);
-  const [videoLoading, setVideoLoading] = useState(false);
-  const [timer, setTimer] = useState<number | null>(null);
-  const [isResetOpen, setIsResetOpen] = useState(false);
-  const [isResetDone, setIsResetDone] = useState(false);
-  /** Paused = interval stopped; timer seconds frozen in state. */
-  const [isResetPaused, setIsResetPaused] = useState(false);
-  const [completeSaveFailed, setCompleteSaveFailed] = useState(false);
+  type CelebrationKind = "daily" | "monthly" | "both" | null;
+  const [celebrationKind, setCelebrationKind] = useState<CelebrationKind>(null);
 
-  /** Bound when challenge opens — survives daily refetch; used for POST /daily-reset/complete. */
-  const resetSessionTaskIdRef = useRef<number | null>(null);
-  const resetSessionTitleRef = useRef("");
-  const resetSessionRoomRef = useRef("");
-
-  // Daily Reset API
-  const { data: dailyFocus, isLoading: dailyFocusLoading } = useQuery<DailyFocusRead>({
-    queryKey: ["daily-reset", "today"],
-    queryFn: async () => {
-      const response = await getDailyReset();
-      return response.data;
-    },
-    refetchOnWindowFocus: true,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+  /** Library deferrals + per-day-slot consumed ids (persisted per user; see dashboardUiPersistence). */
+  const [libSchedule, setLibSchedule] = useState<DashboardLibrarySchedule>({
+    deferredUntilByLibId: {},
+    consumedLibIdsByDaySlot: {},
   });
 
-  const completeMutation = useMutation({
-    mutationFn: async (payload: DailyFocusCompleteIn) => {
-      const response = await api.post<DailyFocusRead>("/daily-reset/complete", payload);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      // Apply server truth immediately (avoids stale card until refetch; respects 5m staleTime).
-      queryClient.setQueryData<DailyFocusRead>(["daily-reset", "today"], data);
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["progress"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard", "daily-tip"] });
-      triggerProgressRefresh();
-    },
-  });
+  /** Set after /auth/me — scopes React Query cache + demo tasks localStorage to this user. */
+  const sessionUserIdRef = useRef<number | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<number | null>(null);
+  /** Bumps on same-tab `token-changed` so we reload session + tasks (not only on first mount). */
+  const [authVersion, setAuthVersion] = useState(0);
+  /** After critical dashboard data is ready, mount lower-priority sections (e.g. YouTube card). */
+  const [secondaryDashboardVisible, setSecondaryDashboardVisible] = useState(false);
+  /** Avoid re-applying persisted dashboard UI unless user or visible week model changes. */
+  const lastDashboardHydrationRef = useRef<{ userId: number; weekSig: string } | null>(null);
+  /** Supersede stale async from Strict Mode / rapid re-auth so `loading` always clears. */
+  const dashboardHydrationRunIdRef = useRef(0);
 
-  const refreshMutation = useMutation({
-    mutationFn: async (payload: DailyFocusRefreshIn) => {
-      const response = await api.post<DailyFocusRead>("/daily-reset/refresh", payload);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData<DailyFocusRead>(["daily-reset", "today"], data);
-      queryClient.invalidateQueries({ queryKey: ["dashboard", "daily-tip"] });
-    },
-  });
+  /** Defer non-critical Google Calendar fetch so it does not compete with tasks + progress. */
+  const [calendarQueryEnabled, setCalendarQueryEnabled] = useState(false);
+
+  useEffect(() => {
+    const onTok = () => setAuthVersion((v) => v + 1);
+    window.addEventListener("token-changed", onTok);
+    return () => window.removeEventListener("token-changed", onTok);
+  }, []);
 
   const {
     data: progressSummary,
     isLoading: progressLoading,
     isError: progressError,
   } = useQuery<ProgressSummaryRead>({
-    queryKey: ["progress", "summary", "week"],
-    queryFn: async () => {
-      const res = await getProgressSummary("week");
-      return res.data;
-    },
-    staleTime: 60_000,
+    queryKey: ["progress", "summary", "week", sessionUserId],
+    queryFn: fetchDashboardProgressWeek,
+    enabled: sessionUserId != null,
+    staleTime: DASHBOARD_QUERY_STALE_MS,
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
 
-  const langParam = apiHeOrEn(i18n.language);
+  const { data: chartTaskReads } = useQuery<TaskRead[]>({
+    queryKey: ["tasks", "chartSlices", sessionUserId],
+    queryFn: fetchDashboardTasksFullList,
+    enabled: sessionUserId != null,
+    staleTime: DASHBOARD_QUERY_STALE_MS,
+    refetchOnMount: true,
+  });
+
+  const { data: calendarAnchor } = useQuery<GoogleDashboardCalendarAnchor>({
+    queryKey: ["google-calendar", "dashboard-anchor", sessionUserId],
+    queryFn: async () => {
+      const { data } = await api.get<GoogleDashboardCalendarAnchor>("/google-calendar/dashboard-anchor");
+      return data;
+    },
+    enabled: sessionUserId != null && calendarQueryEnabled,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: true,
+  });
+
   const calendarDayKey = (() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -258,117 +274,474 @@ export default function Dashboard() {
     const d = String(now.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   })();
-  const dayMs = 86_400_000;
-
-  const {
-    data: dailyInspiration,
-    isPending: inspirationPending,
-    isError: inspirationError,
-  } = useQuery<DailyInspirationRead>({
-    queryKey: ["dashboard", "daily-inspiration", calendarDayKey, langParam],
-    queryFn: async () => {
-      const res = await getDailyInspiration(langParam);
-      return res.data;
-    },
-    staleTime: dayMs,
-    gcTime: dayMs * 2,
-    placeholderData: keepPreviousData,
-    refetchOnWindowFocus: false,
-  });
-
-  const {
-    data: dailyTip,
-    isPending: dailyTipPending,
-    isError: dailyTipError,
-  } = useQuery<DailyTipRead>({
-    queryKey: ["dashboard", "daily-tip", calendarDayKey, langParam],
-    queryFn: async () => {
-      const res = await getDailyTip(langParam);
-      return res.data;
-    },
-    staleTime: dayMs,
-    gcTime: dayMs * 2,
-    placeholderData: keepPreviousData,
-    refetchOnWindowFocus: false,
-  });
 
   useEffect(() => {
-    const onProgressHook = () => {
-      queryClient.invalidateQueries({ queryKey: ["progress"] });
-    };
-    window.addEventListener("daily-focus:completed", onProgressHook);
-    return () => window.removeEventListener("daily-focus:completed", onProgressHook);
-  }, [queryClient]);
-
-  const rooms: DashboardRoom[] = [
-    { id: "living-room", roomTypeKey: "living", emoji: "🏠" },
-    { id: "kitchen", roomTypeKey: "kitchen", emoji: "🍳" },
-    { id: "bedroom", roomTypeKey: "bedroom", emoji: "🛏" },
-    { id: "closet", roomTypeKey: "closet", emoji: "👕" },
-  ];
+    if (sessionUserId === null) {
+      lastDashboardHydrationRef.current = null;
+      setCalendarQueryEnabled(false);
+      return;
+    }
+    setCalendarQueryEnabled(false);
+    const t = window.setTimeout(() => setCalendarQueryEnabled(true), 200);
+    return () => window.clearTimeout(t);
+  }, [sessionUserId]);
 
   useEffect(() => {
+    const runId = ++dashboardHydrationRunIdRef.current;
+    const perfStart = performance.now();
+
     const loadUser = async () => {
-      // Check if user has tokens
-      if (!hasTokens()) {
-        console.log('[Dashboard] No tokens found, redirecting to login');
-        navigate(ROUTES.LOGIN, { replace: true });
-        return;
-      }
+      setLoading(true);
+      sessionUserIdRef.current = null;
+      setSessionUserId(null);
+      setTasks([]);
+
+      const stillCurrent = () => runId === dashboardHydrationRunIdRef.current;
 
       try {
-        // Fetch user info from API
-        await fetchMe();
-      } catch (error) {
-        console.error('[Dashboard] Error fetching user:', error);
-        // If token is invalid, clear and redirect
-        clearTokens();
-        navigate(ROUTES.LOGIN, { replace: true });
-        return;
-      }
-
-      // Load tasks from localStorage or create demo tasks
-      const savedTasks = localStorage.getItem("tasks");
-      if (savedTasks) {
-        try {
-          const parsedTasks = JSON.parse(savedTasks) as Task[];
-          const localizedTasks = localizeDemoTaskTitles(parsedTasks, i18n.language);
-          setTasks(localizedTasks);
-          localStorage.setItem("tasks", JSON.stringify(localizedTasks));
-        } catch (e) {
-          console.error('[Dashboard] Error parsing saved tasks:', e);
+        if (!hasTokens()) {
+          smokeDebug("dashboard:no_tokens_redirect", {});
+          navigate(ROUTES.LOGIN, { replace: true });
+          return;
         }
-      } else {
-        const initialTasks = buildInitialDemoTasks(i18n.language);
-        setTasks(initialTasks);
-        localStorage.setItem("tasks", JSON.stringify(initialTasks));
-      }
 
-      setLoading(false);
+        const meResponse = await fetchMe();
+        if (!stillCurrent()) return;
+        dashboardPerfDebug("auth/me", perfStart);
+
+        const rawId = meResponse.data?.id;
+        const uid =
+          typeof rawId === "number"
+            ? rawId
+            : typeof rawId === "string"
+              ? Number.parseInt(rawId, 10)
+              : NaN;
+        if (!Number.isFinite(uid)) {
+          console.error("[Dashboard] /auth/me returned no usable user id");
+          clearTokens();
+          sessionUserIdRef.current = null;
+          setSessionUserId(null);
+          navigate(ROUTES.LOGIN, { replace: true });
+          return;
+        }
+
+        sessionUserIdRef.current = uid;
+
+        const storageKey = demoTasksStorageKey(uid);
+        const initialWeekKeys = buildLocalSundayWeekDateKeys();
+        const weekStartDateKey = initialWeekKeys[0] ?? formatLocalDateKey(new Date());
+
+        /** Warm React Query cache before enabling user-scoped observers (avoids duplicate in-flight /tasks). */
+        try {
+          await Promise.all([
+            queryClient.fetchQuery({
+              queryKey: ["progress", "summary", "week", uid],
+              queryFn: fetchDashboardProgressWeek,
+              staleTime: DASHBOARD_QUERY_STALE_MS,
+            }),
+            queryClient.fetchQuery({
+              queryKey: ["tasks", "chartSlices", uid],
+              queryFn: fetchDashboardTasksFullList,
+              staleTime: DASHBOARD_QUERY_STALE_MS,
+            }),
+          ]);
+        } catch (e) {
+          console.warn("[Dashboard] Critical dashboard prefetch failed (tasks/progress):", e);
+        }
+        if (!stillCurrent()) return;
+        dashboardPerfDebug("tasks+progress prefetch", perfStart);
+
+        const apiTasks =
+          queryClient.getQueryData<TaskRead[]>(["tasks", "chartSlices", uid]) ?? null;
+
+        /** Prefer server tasks whenever GET /tasks succeeds (including empty list). */
+        let hydratedFromApi = false;
+        if (Array.isArray(apiTasks)) {
+          hydratedFromApi = true;
+          if (apiTasks.length > 0) {
+            const mapped = apiTasks.map(mapTaskReadToDashboardTask);
+            const stripped = stripExpiredTaskDeferrals(mapped, weekStartDateKey);
+            const localizedTasks = localizeDemoTaskTitles(stripped, i18n.language);
+            setTasks(localizedTasks);
+            localStorage.setItem(storageKey, JSON.stringify(localizedTasks));
+          } else {
+            setTasks([]);
+            localStorage.setItem(storageKey, JSON.stringify([]));
+          }
+        }
+
+        if (!stillCurrent()) return;
+
+        if (!hydratedFromApi) {
+          let savedTasks = localStorage.getItem(storageKey);
+          if (!savedTasks) {
+            const legacy = localStorage.getItem("tasks");
+            if (legacy) {
+              localStorage.setItem(storageKey, legacy);
+              localStorage.removeItem("tasks");
+              savedTasks = legacy;
+            }
+          }
+
+          if (savedTasks) {
+            try {
+              const parsedRaw = JSON.parse(savedTasks) as (Task & { displayWeekdayIndex?: number })[];
+              const parsedTasks: Task[] = parsedRaw.map((row) => {
+                const { displayWeekdayIndex: _legacy, ...rest } = row;
+                return rest;
+              });
+              const stripped = stripExpiredTaskDeferrals(parsedTasks, weekStartDateKey);
+              const localizedTasks = localizeDemoTaskTitles(stripped, i18n.language);
+              setTasks(localizedTasks);
+              localStorage.setItem(storageKey, JSON.stringify(localizedTasks));
+            } catch (e) {
+              console.error("[Dashboard] Error parsing saved tasks; restoring default demo list:", e);
+              const initialTasks = buildInitialDemoTasks(i18n.language);
+              setTasks(initialTasks);
+              localStorage.setItem(storageKey, JSON.stringify(initialTasks));
+            }
+          } else {
+            const initialTasks = buildInitialDemoTasks(i18n.language);
+            setTasks(initialTasks);
+            localStorage.setItem(storageKey, JSON.stringify(initialTasks));
+          }
+        }
+
+        if (!stillCurrent()) return;
+        setSessionUserId(uid);
+        dashboardPerfDebug("sessionUserId + local tasks", perfStart);
+      } catch (error) {
+        console.error("[Dashboard] Error fetching user:", error);
+        clearTokens();
+        sessionUserIdRef.current = null;
+        setSessionUserId(null);
+        navigate(ROUTES.LOGIN, { replace: true });
+      } finally {
+        if (runId === dashboardHydrationRunIdRef.current) {
+          setLoading(false);
+          dashboardPerfDebug("dashboard bootstrap complete", perfStart);
+        }
+      }
     };
 
-    loadUser();
-  }, [i18n.language, navigate]);
+    void loadUser();
+  }, [i18n.language, navigate, authVersion, queryClient]);
 
-  const visibleDashboardTasks = useMemo(
-    () => filterPendingTasksForSelectedDay(tasks, selectedDayIndex),
-    [tasks, selectedDayIndex]
+  useEffect(() => {
+    if (loading) {
+      setSecondaryDashboardVisible(false);
+      return;
+    }
+    const id = window.requestAnimationFrame(() => setSecondaryDashboardVisible(true));
+    return () => window.cancelAnimationFrame(id);
+  }, [loading]);
+
+  const localWeekDateKeys = useMemo(() => buildLocalSundayWeekDateKeys(new Date()), [calendarDayKey]);
+
+  const weekDateKeys = useMemo((): string[] => {
+    const w = calendarAnchor?.week_dates;
+    if (calendarAnchor?.connected && Array.isArray(w) && w.length === 7) {
+      return [...w];
+    }
+    return localWeekDateKeys;
+  }, [calendarAnchor, localWeekDateKeys]);
+
+  const displayTimeZone =
+    calendarAnchor?.connected && calendarAnchor.time_zone ? calendarAnchor.time_zone : undefined;
+
+  const calendarTodayKey = useMemo(() => {
+    if (calendarAnchor?.connected && calendarAnchor.today) return calendarAnchor.today;
+    return formatLocalDateKey(new Date());
+  }, [calendarAnchor]);
+
+  /** Sunday cell as local Date (for legacy helpers); strip labels use `weekDateKeys` when Google is linked. */
+  const weekStartSunday = useMemo(() => {
+    const d = parseDateKeyLocal(weekDateKeys[0] ?? "");
+    if (d) return d;
+    const n = new Date();
+    n.setHours(0, 0, 0, 0);
+    n.setDate(n.getDate() - n.getDay());
+    return n;
+  }, [weekDateKeys]);
+
+  const daySlotKey =
+    weekDateKeys[selectedDayIndex] ?? formatLocalDateKey(addDaysLocal(weekStartSunday, selectedDayIndex));
+
+  useEffect(() => {
+    if (sessionUserId == null) return;
+    if (weekDateKeys.length !== 7) return;
+    const weekSig = weekDateKeys.join("|");
+    const prev = lastDashboardHydrationRef.current;
+    if (prev && prev.userId === sessionUserId && prev.weekSig === weekSig) return;
+
+    const fallbackDayIndex =
+      calendarAnchor?.connected && typeof calendarAnchor.today_day_index === "number"
+        ? calendarAnchor.today_day_index
+        : new Date().getDay();
+
+    const persisted = loadDashboardUiState(sessionUserId, weekDateKeys, fallbackDayIndex);
+    setSelectedDayIndex(persisted.selectedDayIndex);
+    setLibSchedule(persisted.libSchedule);
+    lastDashboardHydrationRef.current = { userId: sessionUserId, weekSig };
+  }, [
+    sessionUserId,
+    weekDateKeys,
+    calendarAnchor?.connected,
+    calendarAnchor?.today_day_index,
+    calendarAnchor?.week_dates,
+  ]);
+
+  useEffect(() => {
+    if (sessionUserId == null) return;
+    if (loading) return;
+    saveDashboardUiState(sessionUserId, {
+      v: DASHBOARD_UI_STORAGE_VERSION,
+      selectedDateKey: daySlotKey,
+      libSchedule,
+    });
+  }, [sessionUserId, loading, daySlotKey, libSchedule]);
+
+  type DayBucketIds = { daily: string[]; monthly: string[] };
+
+  const { daily: eligibleDailySorted, monthly: eligibleMonthlySorted } = useMemo(
+    () => sortEligiblePendingForDayBucketsForDateKey(tasks, daySlotKey),
+    [tasks, daySlotKey],
   );
 
-  const roomForVideo = useMemo(() => {
-    const first = visibleDashboardTasks[0];
-    return first?.room ?? "living-room";
-  }, [visibleDashboardTasks]);
+  const dailyEligibleWithRefill = useMemo(
+    () =>
+      appendLibraryRefillToEligible(eligibleDailySorted, {
+        bucket: "daily",
+        dayIndex: selectedDayIndex,
+        weekStartSunday,
+        daySlotKey,
+        language: i18n.language,
+        bucketCap: DASHBOARD_DAILY_BUCKET_CAP,
+        schedule: libSchedule,
+      }),
+    [eligibleDailySorted, selectedDayIndex, weekStartSunday, daySlotKey, i18n.language, libSchedule],
+  );
+
+  const monthlyEligibleWithRefill = useMemo(
+    () =>
+      appendLibraryRefillToEligible(eligibleMonthlySorted, {
+        bucket: "monthly",
+        dayIndex: selectedDayIndex,
+        weekStartSunday,
+        daySlotKey,
+        language: i18n.language,
+        bucketCap: DASHBOARD_MONTHLY_BUCKET_CAP,
+        schedule: libSchedule,
+      }),
+    [eligibleMonthlySorted, selectedDayIndex, weekStartSunday, daySlotKey, i18n.language, libSchedule],
+  );
+
+  const [visibleIdsByDay, setVisibleIdsByDay] = useState<Record<string, DayBucketIds>>({});
+
+  useLayoutEffect(() => {
+    setVisibleIdsByDay((prev) => {
+      const prevSlot = prev[daySlotKey];
+      const nextDaily = reconcileVisibleTaskIds(
+        dailyEligibleWithRefill,
+        prevSlot?.daily,
+        DASHBOARD_DAILY_BUCKET_CAP,
+      );
+      const nextMonthly = reconcileVisibleTaskIds(
+        monthlyEligibleWithRefill,
+        prevSlot?.monthly,
+        DASHBOARD_MONTHLY_BUCKET_CAP,
+      );
+      if (
+        prevSlot &&
+        prevSlot.daily.length === nextDaily.length &&
+        prevSlot.monthly.length === nextMonthly.length &&
+        prevSlot.daily.every((id, i) => id === nextDaily[i]) &&
+        prevSlot.monthly.every((id, i) => id === nextMonthly[i])
+      ) {
+        return prev;
+      }
+      return { ...prev, [daySlotKey]: { daily: nextDaily, monthly: nextMonthly } };
+    });
+  }, [dailyEligibleWithRefill, monthlyEligibleWithRefill, daySlotKey]);
+
+  const visibleIdsForSlot = useMemo((): DayBucketIds => {
+    const fromState = visibleIdsByDay[daySlotKey];
+    if (fromState) return fromState;
+    return {
+      daily: reconcileVisibleTaskIds(dailyEligibleWithRefill, undefined, DASHBOARD_DAILY_BUCKET_CAP),
+      monthly: reconcileVisibleTaskIds(monthlyEligibleWithRefill, undefined, DASHBOARD_MONTHLY_BUCKET_CAP),
+    };
+  }, [visibleIdsByDay, daySlotKey, dailyEligibleWithRefill, monthlyEligibleWithRefill]);
+
+  const librarySyntheticTasks = useMemo(() => {
+    const m = new Map<string, Task>();
+    for (const t of dailyEligibleWithRefill) {
+      if (isLibraryDashboardTaskId(String(t.id))) m.set(String(t.id), t);
+    }
+    for (const t of monthlyEligibleWithRefill) {
+      if (isLibraryDashboardTaskId(String(t.id))) m.set(String(t.id), t);
+    }
+    return [...m.values()];
+  }, [dailyEligibleWithRefill, monthlyEligibleWithRefill]);
+
+  /** Real + library suggestions — used to know if “daily/monthly for this day” buckets exist. */
+  const mergedTasksForSchedule = useMemo(() => {
+    const m = new Map<string, Task>();
+    for (const t of tasks) m.set(String(t.id), t);
+    for (const t of librarySyntheticTasks) m.set(String(t.id), t);
+    return [...m.values()];
+  }, [tasks, librarySyntheticTasks]);
+
+  const hasScheduledDailyThisSlot = useMemo(
+    () =>
+      mergedTasksForSchedule.some(
+        (t) =>
+          taskScheduledOnDateKey(t, daySlotKey) && (t.frequency === "daily" || t.frequency === "weekly"),
+      ),
+    [mergedTasksForSchedule, daySlotKey],
+  );
+
+  const hasScheduledMonthlyThisSlot = useMemo(
+    () =>
+      mergedTasksForSchedule.some(
+        (t) => taskScheduledOnDateKey(t, daySlotKey) && t.frequency === "monthly",
+      ),
+    [mergedTasksForSchedule, daySlotKey],
+  );
+
+  const dailyBucketComplete =
+    hasScheduledDailyThisSlot && dailyEligibleWithRefill.length === 0;
+  const monthlyBucketComplete =
+    hasScheduledMonthlyThisSlot && monthlyEligibleWithRefill.length === 0;
+
+  const prevDailyCompleteRef = useRef(false);
+  const prevMonthlyCompleteRef = useRef(false);
+
+  useEffect(() => {
+    prevDailyCompleteRef.current = dailyBucketComplete;
+    prevMonthlyCompleteRef.current = monthlyBucketComplete;
+  }, [daySlotKey]);
+
+  useEffect(() => {
+    const wasD = prevDailyCompleteRef.current;
+    const wasM = prevMonthlyCompleteRef.current;
+    const nowD = dailyBucketComplete;
+    const nowM = monthlyBucketComplete;
+    const edgeD = nowD && !wasD;
+    const edgeM = nowM && !wasM;
+    if (edgeD && edgeM) setCelebrationKind("both");
+    else if (edgeD) setCelebrationKind("daily");
+    else if (edgeM) setCelebrationKind("monthly");
+    prevDailyCompleteRef.current = nowD;
+    prevMonthlyCompleteRef.current = nowM;
+  }, [dailyBucketComplete, monthlyBucketComplete]);
+
+  const taskById = useMemo(() => {
+    const m = new Map(tasks.map((t) => [String(t.id), t]));
+    for (const t of librarySyntheticTasks) {
+      m.set(String(t.id), t);
+    }
+    return m;
+  }, [tasks, librarySyntheticTasks]);
+
+  /** Real tasks + persisted library completions so the donut matches "המשימות שלי להיום". */
+  const tasksForCategoryProgress = useMemo(() => {
+    const slotKeys = weekDateKeys.length === 7 ? [...weekDateKeys] : Array.from({ length: 7 }, (_, i) =>
+      formatLocalDateKey(addDaysLocal(weekStartSunday, i)),
+    );
+    const extras: Task[] = [];
+    for (const key of slotKeys) {
+      const consumed = libSchedule.consumedLibIdsByDaySlot[key];
+      if (!consumed) continue;
+      for (const libId of Object.keys(consumed)) {
+        if (!consumed[libId]) continue;
+        const snap = libraryCompletedTaskSnapshot(libId, i18n.language);
+        if (snap) extras.push(snap);
+      }
+    }
+    return [...tasks, ...extras];
+  }, [tasks, libSchedule, weekDateKeys, weekStartSunday, i18n.language]);
+
+  const resolveVisibleBucket = useCallback(
+    (ids: string[], allowed: (t: Task) => boolean): Task[] => {
+      return ids
+        .map((id) => taskById.get(id))
+        .filter((t): t is Task => {
+          if (!t || t.completed) return false;
+          if (!taskScheduledOnDateKey(t, daySlotKey)) return false;
+          return allowed(t);
+        });
+    },
+    [taskById, daySlotKey],
+  );
+
+  const visibleDailyTasks = useMemo(
+    () =>
+      resolveVisibleBucket(visibleIdsForSlot.daily, (t) => t.frequency === "daily" || t.frequency === "weekly"),
+    [resolveVisibleBucket, visibleIdsForSlot.daily],
+  );
+
+  const visibleMonthlyTasks = useMemo(
+    () => resolveVisibleBucket(visibleIdsForSlot.monthly, (t) => t.frequency === "monthly"),
+    [resolveVisibleBucket, visibleIdsForSlot.monthly],
+  );
+
+  /** Real tasks and/or library backfill pool — avoids hiding the section when only suggestions apply. */
+  const hasAnyTasksForSelectedDay =
+    dailyEligibleWithRefill.length > 0 || monthlyEligibleWithRefill.length > 0;
+
+  const selectedDateLabel = useMemo(() => {
+    if (displayTimeZone) {
+      return formatDashboardLongDateFromYmd(daySlotKey, i18n.language, displayTimeZone);
+    }
+    const d = new Date(weekStartSunday);
+    d.setDate(d.getDate() + selectedDayIndex);
+    return formatDashboardLongDate(d, i18n.language);
+  }, [daySlotKey, displayTimeZone, weekStartSunday, selectedDayIndex, i18n.language]);
 
   const persistTaskComplete = async (taskIdStr: string) => {
-    const currentTask = tasks.find((task) => String(task.id) === taskIdStr);
+    const currentTask = taskById.get(taskIdStr) ?? tasks.find((task) => String(task.id) === taskIdStr);
     if (!currentTask || currentTask.completed) return;
 
+    if (isLibraryDashboardTaskId(taskIdStr)) {
+      setLibSchedule((prev) => {
+        const consumedSlot = { ...(prev.consumedLibIdsByDaySlot[daySlotKey] ?? {}) };
+        consumedSlot[taskIdStr] = true;
+        const { [taskIdStr]: _rm, ...restDef } = prev.deferredUntilByLibId;
+        return {
+          deferredUntilByLibId: restDef,
+          consumedLibIdsByDaySlot: {
+            ...prev.consumedLibIdsByDaySlot,
+            [daySlotKey]: consumedSlot,
+          },
+        };
+      });
+      if (sessionUserId != null) {
+        queryClient.setQueryData<ProgressSummaryRead>(
+          ["progress", "summary", "week", sessionUserId],
+          (prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              completed_tasks_this_week: (prev.completed_tasks_this_week ?? 0) + 1,
+            };
+          },
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      return;
+    }
+
+    const tasksStorageKey =
+      sessionUserIdRef.current != null ? demoTasksStorageKey(sessionUserIdRef.current) : "tasks";
+
     const optimisticTasks = tasks.map((task) =>
-      String(task.id) === taskIdStr ? { ...task, completed: true } : task
+      String(task.id) === taskIdStr
+        ? { ...task, completed: true, deferredUntilDateKey: undefined }
+        : task
     );
     setTasks(optimisticTasks);
-    localStorage.setItem("tasks", JSON.stringify(optimisticTasks));
+    localStorage.setItem(tasksStorageKey, JSON.stringify(optimisticTasks));
 
     const numericId = Number(taskIdStr);
     if (!Number.isInteger(numericId) || numericId <= 0) {
@@ -379,234 +752,127 @@ export default function Dashboard() {
 
     try {
       await api.patch(`/tasks/${numericId}`, { completed: true });
+      // Immediate summary UX: refetch can lag; donut already tracks full `tasks` via DashboardCategoryProgress.
+      if (sessionUserId != null) {
+        queryClient.setQueryData<ProgressSummaryRead>(
+          ["progress", "summary", "week", sessionUserId],
+          (prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              completed_tasks_this_week: (prev.completed_tasks_this_week ?? 0) + 1,
+            };
+          },
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["progress"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
     } catch {
       setTasks((prev) => {
         const reverted = prev.map((task) =>
-          String(task.id) === taskIdStr ? { ...task, completed: false } : task
+          String(task.id) === taskIdStr
+            ? { ...task, completed: false, deferredUntilDateKey: currentTask.deferredUntilDateKey }
+            : task
         );
-        localStorage.setItem("tasks", JSON.stringify(reverted));
+        localStorage.setItem(tasksStorageKey, JSON.stringify(reverted));
         return reverted;
       });
     }
   };
+
+  /** Clear one-shot deferrals from previous weeks; persist when changed. */
   useEffect(() => {
-    if (!roomForVideo) return;
-    let isMounted = true;
-    setVideoLoading(true);
+    const weekStartKey = weekDateKeys[0] ?? formatLocalDateKey(weekStartSunday);
+    setTasks((prev) => {
+      const stripped = stripExpiredTaskDeferrals(prev, weekStartKey);
+      const changed = stripped.some(
+        (t, i) => (t.deferredUntilDateKey ?? "") !== (prev[i]?.deferredUntilDateKey ?? "")
+      );
+      if (!changed) return prev;
+      const tasksStorageKey =
+        sessionUserIdRef.current != null ? demoTasksStorageKey(sessionUserIdRef.current) : "tasks";
+      localStorage.setItem(tasksStorageKey, JSON.stringify(stripped));
+      return stripped;
+    });
+  }, [weekDateKeys, weekStartSunday]);
 
-    api.get<RecommendedVideo>("/content/recommended-video", {
-      params: { room_id: roomForVideo, lang: apiHeOrEn(i18n.language) },
-    })
-      .then(({ data }) => {
-        if (!isMounted) return;
-        setRecommendedVideo(data);
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setRecommendedVideo(null);
-      })
-      .finally(() => {
-        if (!isMounted) return;
-        setVideoLoading(false);
+  const deferTaskToNextDay = useCallback(
+    (taskIdStr: string) => {
+      if (exitingTaskId) return;
+      const deferredKey = addDaysToDateKey(daySlotKey, 1);
+      const nextDate = parseDateKeyLocal(deferredKey);
+      const dayLabel = displayTimeZone
+        ? formatDashboardWeekdayShortFromYmd(deferredKey, i18n.language, displayTimeZone)
+        : formatDashboardWeekdayShort(nextDate ?? new Date(), i18n.language);
+
+      if (isLibraryDashboardTaskId(taskIdStr)) {
+        const task = taskById.get(taskIdStr);
+        if (!task || task.completed) return;
+        setLibSchedule((prev) => ({
+          ...prev,
+          deferredUntilByLibId: { ...prev.deferredUntilByLibId, [taskIdStr]: deferredKey },
+        }));
+        showSuccess(td("taskDeferredToDay", { day: dayLabel }));
+        return;
+      }
+
+      let applied = false;
+      setTasks((prev) => {
+        const task = prev.find((t) => String(t.id) === taskIdStr);
+        if (!task || task.completed) return prev;
+        applied = true;
+        const nextTasks = prev.map((t) =>
+          String(t.id) === taskIdStr ? { ...t, deferredUntilDateKey: deferredKey } : t
+        );
+        const tasksStorageKey =
+          sessionUserIdRef.current != null ? demoTasksStorageKey(sessionUserIdRef.current) : "tasks";
+        localStorage.setItem(tasksStorageKey, JSON.stringify(nextTasks));
+        return nextTasks;
       });
+      if (applied) showSuccess(td("taskDeferredToDay", { day: dayLabel }));
+    },
+    [exitingTaskId, daySlotKey, displayTimeZone, i18n.language, td, taskById],
+  );
 
-    return () => {
-      isMounted = false;
-    };
-  }, [roomForVideo, i18n.language]);
-
-  // Get daily task from API
-  const dailyTask = dailyFocus?.task || null;
+  const progressStatsPending = loading || progressLoading;
   const completedTasksCount =
-    progressLoading ? null : progressError ? 0 : (progressSummary?.completed_tasks_this_week ?? 0);
+    progressStatsPending ? null : progressError ? 0 : (progressSummary?.completed_tasks_this_week ?? 0);
   const organizedRoomsCount =
-    progressLoading ? null : progressError ? 0 : (progressSummary?.rooms_progressed_this_week ?? 0);
-  const streakDays = progressLoading ? null : progressError ? 0 : (progressSummary?.streak_days ?? 0);
-  const trendMax = useMemo(() => {
-    const arr = progressSummary?.daily_completed_counts ?? [];
-    if (!arr.length) return 1;
-    return Math.max(1, ...arr.map((d) => d.count));
-  }, [progressSummary]);
-  const dailyTaskTime = dailyTask?.due_date
-    ? new Date(dailyTask.due_date).toLocaleTimeString(apiHeOrEn(i18n.language) === "he" ? "he-IL" : "en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : td("allDay");
-  const secondsForClock = isResetDone ? 0 : timer ?? 0;
-  const timerLabel = `${String(Math.floor(secondsForClock / 60)).padStart(2, "0")}:${String(
-    secondsForClock % 60
-  ).padStart(2, "0")}`;
-  const videoId = recommendedVideo?.videoId || extractYouTubeId(recommendedVideo?.url) || "dQw4w9WgXcQ";
-  const youtubeWatchUrl =
-    recommendedVideo?.url || `https://www.youtube.com/watch?v=${videoId}`;
-  const youtubeThumbnailUrl =
-    recommendedVideo?.thumbnail ||
-    `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-  const youtubeDisplayTitle = recommendedVideo?.title?.trim() || td("youtubeFallbackTitle");
+    progressStatsPending ? null : progressError ? 0 : (progressSummary?.rooms_progressed_this_week ?? 0);
+  const streakDays = progressStatsPending ? null : progressError ? 0 : (progressSummary?.streak_days ?? 0);
 
-  // Get room info from daily task
-  const dailyRoomId = dailyTask?.room_id;
-  const dailyRoom = dailyRoomId ? rooms.find((r) => r.id === String(dailyRoomId)) : null;
-  const dailyRoomLabel = dailyRoom ? tRooms(`room_types.${dailyRoom.roomTypeKey}`) : "";
-  const dailyRoomEmoji = dailyRoom?.emoji || "🏡";
+  const videoId = DASHBOARD_FEATURED_YOUTUBE_VIDEO_ID;
+  const youtubeWatchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const youtubeThumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+  const youtubeDisplayTitle = td("youtubeDashboardFeaturedTitle");
 
-  const startTimer = () => {
-    if (!dailyTask || !dailyFocus) return;
-    const tid =
-      dailyFocus.task_id ??
-      (typeof dailyTask.id === "number" ? dailyTask.id : Number(dailyTask.id));
-    resetSessionTaskIdRef.current = Number.isFinite(tid) ? tid : dailyFocus.task_id ?? null;
-    resetSessionTitleRef.current = dailyTask.title;
-    resetSessionRoomRef.current = dailyRoomLabel ? `${dailyRoomEmoji} ${dailyRoomLabel}` : "";
-    setCompleteSaveFailed(false);
-    setIsResetPaused(false);
-    setIsResetOpen(true);
-    setIsResetDone(false);
-    setTimer(300);
-  };
-
-  useEffect(() => {
-    if (!isResetOpen || isResetPaused || isResetDone) return;
-    const id = window.setInterval(() => {
-      setTimer((prev) => {
-        if (prev === null || prev < 1) return prev;
-        if (prev <= 1) {
-          setIsResetDone(true);
-          return null;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [isResetOpen, isResetPaused, isResetDone]);
-
-  const cancelResetSession = () => {
-    resetSessionTaskIdRef.current = null;
-    setIsResetOpen(false);
-    setIsResetDone(false);
-    setIsResetPaused(false);
-    setTimer(null);
-    setCompleteSaveFailed(false);
-  };
-
-  const markChallengeFinishedEarly = () => {
-    setIsResetPaused(true);
-    setTimer(null);
-    setIsResetDone(true);
-  };
-
-  /** POST /daily-reset/complete — does not close modal (completion UX stays until user chooses next step). */
-  const saveChallengeCompletionOnly = async (): Promise<boolean> => {
-    const taskId = resetSessionTaskIdRef.current ?? dailyFocus?.task_id ?? undefined;
-    if (taskId == null && dailyFocus?.task_id == null) return false;
-    setCompleteSaveFailed(false);
-    try {
-      await completeMutation.mutateAsync({
-        task_id: taskId ?? dailyFocus?.task_id ?? undefined,
-      });
-      setCompleteSaveFailed(false);
-      return true;
-    } catch {
-      setCompleteSaveFailed(true);
-      showError(tc("completeSaveError"));
-      return false;
-    }
-  };
-
-  const closeChallengeModalClean = () => {
-    resetSessionTaskIdRef.current = null;
-    setIsResetOpen(false);
-    setIsResetDone(false);
-    setIsResetPaused(false);
-    setTimer(null);
-    setCompleteSaveFailed(false);
-  };
-
-  /** Save, refresh daily reset for a new task, close (habit momentum). */
-  const finishChallengeNextTask = async () => {
-    if (completeMutation.isPending || refreshMutation.isPending) return;
-    const ok = await saveChallengeCompletionOnly();
-    if (!ok) return;
-    try {
-      await refreshMutation.mutateAsync({});
-    } catch {
-      showError(tc("refreshAfterSaveError"));
-    } finally {
-      closeChallengeModalClean();
-    }
-  };
-
-  /** Save and return to dashboard (no refresh of focus). */
-  const finishChallengeBackToDashboard = async () => {
-    if (completeMutation.isPending || refreshMutation.isPending) return;
-    const ok = await saveChallengeCompletionOnly();
-    if (!ok) return;
-    closeChallengeModalClean();
-  };
-
-  /** Card "Done" without opening challenge — uses current API focus only. */
-  const completeDailyTaskFromCard = async () => {
-    if (!dailyFocus) return;
-    try {
-      await completeMutation.mutateAsync({
-        task_id: dailyFocus.task_id || undefined,
-      });
-    } catch {
-      showError(tc("completeSaveError"));
-    }
-  };
-
-  const refreshDailyTask = async () => {
-    const payload: DailyFocusRefreshIn = {};
-    await refreshMutation.mutateAsync(payload);
-  };
-
-  const startSmallTask = () => {
-    if (dailyTask && !dailyFocus?.completed_at) {
-      startTimer();
-      return;
-    }
-    navigate(ROUTES.ADD_TASK);
-  };
-
-  const challengeStatLine = useMemo(() => {
-    if (streakDays != null && streakDays > 0) {
-      return tc("statStreak", { n: streakDays });
-    }
-    if (progressSummary != null && !progressLoading && !progressError) {
-      return tc("statWeek", { n: progressSummary.completed_tasks_this_week ?? 0 });
-    }
-    return null;
-  }, [streakDays, progressSummary, progressLoading, progressError, tc]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir={dirAttr}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">{td("loading")}</p>
-        </div>
-      </div>
-    );
-  }
+  const showTaskAreaSkeleton = loading;
+  const progressCardLoading = loading || progressLoading;
 
   return (
     <div style={{ display: "grid", gap: 24 }} dir={dirAttr}>
-      <div className="dashboard-hero-compact">
-        <p className="dashboard-hero-compact__text">{td("heroCompactSub")}</p>
-        <button type="button" className="dashboard-hero-compact__btn" onClick={startSmallTask}>
-          {td("heroCompactCta")}
-        </button>
-      </div>
-
       <section className="daily-card dashboard-daily-section" aria-labelledby="dashboard-daily-tasks-heading">
         <h2 id="dashboard-daily-tasks-heading" className="dashboard-daily-section__title">
-          {td("dailyTasksTitle")}
+          {td("tasksForSelectedDayTitle")}
         </h2>
-        {visibleDashboardTasks.length === 0 ? (
+        <p className="dashboard-daily-section__subtitle">
+          {showTaskAreaSkeleton ? <span className="dashboard-daily-skeleton-inline" aria-hidden /> : selectedDateLabel}
+        </p>
+        {showTaskAreaSkeleton ? (
+          <div className="dashboard-daily-task-list" aria-busy="true" aria-label={td("loading")}>
+            <div className="dashboard-daily-bucket">
+              <h3 className="dashboard-daily-bucket__title">{td("suggestedDailySectionTitle")}</h3>
+              <div className="dashboard-daily-skeleton-card" />
+              <div className="dashboard-daily-skeleton-card" />
+              <div className="dashboard-daily-skeleton-card dashboard-daily-skeleton-card--short" />
+            </div>
+            <div className="dashboard-daily-bucket dashboard-daily-bucket--monthly">
+              <h3 className="dashboard-daily-bucket__title">{td("suggestedMonthlySectionTitle")}</h3>
+              <div className="dashboard-daily-skeleton-card" />
+              <div className="dashboard-daily-skeleton-card dashboard-daily-skeleton-card--short" />
+            </div>
+          </div>
+        ) : !hasAnyTasksForSelectedDay ? (
           <div className="dashboard-daily-empty">
             <p className="dashboard-daily-empty__text">{td("allClearForDay")}</p>
             <button type="button" className="dashboard-daily-empty__cta" onClick={() => navigate(ROUTES.ADD_TASK)}>
@@ -615,42 +881,124 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="dashboard-daily-task-list">
-            {visibleDashboardTasks.map((task) => (
-              <DashboardDailyTaskCard
-                key={task.id}
-                task={task}
-                categoryLabel={getDashboardTaskCategoryLabel(task.room, tPc, tRooms)}
-                isExiting={exitingTaskId === String(task.id)}
-                onCompleteClick={() => {
-                  if (exitingTaskId) return;
-                  const reduceMotion =
-                    typeof window !== "undefined" &&
-                    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-                  if (reduceMotion) {
-                    void persistTaskComplete(String(task.id));
-                    return;
-                  }
-                  setExitingTaskId(String(task.id));
-                }}
-                onExitAnimationEnd={() => {
-                  void persistTaskComplete(String(task.id));
-                  setExitingTaskId((cur) => (cur === String(task.id) ? null : cur));
-                }}
-              />
-            ))}
+            <div className="dashboard-daily-bucket">
+              <h3 className="dashboard-daily-bucket__title">{td("suggestedDailySectionTitle")}</h3>
+              {visibleDailyTasks.length === 0 ? (
+                <p className="dashboard-daily-bucket__empty">{td("bucketEmptyDaily")}</p>
+              ) : (
+                visibleDailyTasks.map((task) => (
+                  <DashboardDailyTaskCard
+                    key={task.id}
+                    task={task}
+                    categoryLabel={getDashboardTaskCategoryLabel(task.room, tPc, tRooms)}
+                    isExiting={exitingTaskId === String(task.id)}
+                    onCompleteClick={() => {
+                      if (exitingTaskId) return;
+                      const reduceMotion =
+                        typeof window !== "undefined" &&
+                        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                      if (reduceMotion) {
+                        void persistTaskComplete(String(task.id));
+                        return;
+                      }
+                      setExitingTaskId(String(task.id));
+                    }}
+                    onExitAnimationEnd={() => {
+                      void persistTaskComplete(String(task.id));
+                      setExitingTaskId((cur) => (cur === String(task.id) ? null : cur));
+                    }}
+                    onDeferToNextDay={() => deferTaskToNextDay(String(task.id))}
+                  />
+                ))
+              )}
+            </div>
+
+            <div className="dashboard-daily-bucket dashboard-daily-bucket--monthly">
+              <h3 className="dashboard-daily-bucket__title">{td("suggestedMonthlySectionTitle")}</h3>
+              {visibleMonthlyTasks.length === 0 ? (
+                <p className="dashboard-daily-bucket__empty">{td("bucketEmptyMonthly")}</p>
+              ) : (
+                visibleMonthlyTasks.map((task) => (
+                  <DashboardDailyTaskCard
+                    key={task.id}
+                    task={task}
+                    categoryLabel={getDashboardTaskCategoryLabel(task.room, tPc, tRooms)}
+                    isExiting={exitingTaskId === String(task.id)}
+                    onCompleteClick={() => {
+                      if (exitingTaskId) return;
+                      const reduceMotion =
+                        typeof window !== "undefined" &&
+                        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                      if (reduceMotion) {
+                        void persistTaskComplete(String(task.id));
+                        return;
+                      }
+                      setExitingTaskId(String(task.id));
+                    }}
+                    onExitAnimationEnd={() => {
+                      void persistTaskComplete(String(task.id));
+                      setExitingTaskId((cur) => (cur === String(task.id) ? null : cur));
+                    }}
+                    onDeferToNextDay={() => deferTaskToNextDay(String(task.id))}
+                  />
+                ))
+              )}
+            </div>
+
+            <p className="dashboard-daily-task-list__defer-hint">{td("taskSwipeDeferHint")}</p>
           </div>
         )}
       </section>
 
-      <DashboardWeekBar selectedDayIndex={selectedDayIndex} onSelectDay={setSelectedDayIndex} />
+      <DashboardWeekBar
+        weekStart={weekStartSunday}
+        weekDateKeys={weekDateKeys}
+        displayTimeZone={displayTimeZone}
+        calendarTodayKey={calendarTodayKey}
+        selectedDayIndex={selectedDayIndex}
+        onSelectDay={setSelectedDayIndex}
+        tasks={tasks}
+      />
 
-      <section className="lifestyle-card" aria-labelledby="dashboard-youtube-heading">
-        <div className="lifestyle-title" id="dashboard-youtube-heading">
-          {td("youtubeRecommendedTitle")}
-        </div>
-        {videoLoading ? (
-          <div className="dashboard-youtube-skeleton" />
-        ) : (
+      <DashboardCategoryProgress
+        progressLoading={progressCardLoading}
+        progressError={progressError}
+        completedThisWeek={completedTasksCount}
+        streakDays={streakDays}
+        areasActive={organizedRoomsCount}
+        categoryProgressApi={progressSummary?.category_progress}
+        localTasks={tasksForCategoryProgress}
+        taskReads={chartTaskReads}
+      />
+
+      {celebrationKind ? (
+        <Modal
+          title={td("progressCelebrateTitle")}
+          description={null}
+          onClose={() => setCelebrationKind(null)}
+        >
+          <p className="dashboard-celebration-body">
+            {celebrationKind === "both"
+              ? td("progressCelebrateBoth")
+              : celebrationKind === "monthly"
+                ? td("progressCelebrateMonthly")
+                : daySlotKey === calendarTodayKey
+                  ? td("progressCelebrateDailyToday")
+                  : td("progressCelebrateDailyOtherDay")}
+          </p>
+          <div className="dashboard-celebration-actions">
+            <button type="button" className="wow-btn wow-btnPrimary" onClick={() => setCelebrationKind(null)}>
+              {td("progressCelebrateCta")}
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {secondaryDashboardVisible ? (
+        <section className="lifestyle-card" aria-labelledby="dashboard-youtube-heading">
+          <div className="lifestyle-title" id="dashboard-youtube-heading">
+            {td("youtubeRecommendedTitle")}
+          </div>
           <a
             className="dashboard-youtube-card"
             href={youtubeWatchUrl}
@@ -666,256 +1014,8 @@ export default function Dashboard() {
               <p className="dashboard-youtube-card__cta">{td("youtubeWatchCta")}</p>
             </div>
           </a>
-        )}
-      </section>
-
-      <div
-        className="dashboard-daily-insights"
-        style={{
-          display: "grid",
-          gap: 16,
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-        }}
-      >
-        <div className="daily-card" aria-live="polite">
-          <h2>{td("dailyInspirationTitle")}</h2>
-          {inspirationPending && !dailyInspiration ? (
-            <p className="task-title">{td("loading")}</p>
-          ) : inspirationError ? (
-            <p className="wow-muted">
-              {td("inspirationLoadError")}
-            </p>
-          ) : (
-            <p className="task-title" style={{ fontWeight: 500, lineHeight: 1.5 }}>
-              {dailyInspiration?.quote}
-            </p>
-          )}
-        </div>
-        <div className="daily-card" aria-live="polite">
-          <h2>{td("dailyTipTitle")}</h2>
-          <div className="wow-muted" style={{ fontSize: "0.85rem", marginBottom: 8 }}>
-            {td("dailyTipBadge")}
-          </div>
-          {dailyTipPending && !dailyTip ? (
-            <p className="task-title">{td("loading")}</p>
-          ) : dailyTipError ? (
-            <p className="wow-muted">
-              {td("tipLoadError")}
-            </p>
-          ) : (
-            <p className="task-title" style={{ fontWeight: 500, lineHeight: 1.5 }}>
-              {dailyTip?.tip}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="daily-card">
-        <h2>{td("dailyTaskTitle")}</h2>
-        {dailyFocusLoading ? (
-          <p className="task-title">{td("loading")}</p>
-        ) : dailyTask ? (
-          <>
-            {dailyRoomLabel && (
-              <div className="daily-line">{dailyRoomEmoji} {dailyRoomLabel}</div>
-            )}
-            <p className="task-title">{dailyTask.title}</p>
-            {dailyTask.due_date && (
-              <div className="wow-muted">{dailyTaskTime}</div>
-            )}
-            {dailyFocus?.completed_at && (
-              <div className="wow-muted" style={{ color: "#10b981" }}>
-                ✓ {td("completedBadge")}
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="task-title">{td("noOpenTasks")}</p>
-        )}
-
-        <div className="actions">
-          <button
-            type="button"
-            className="primary"
-            onClick={startTimer}
-            disabled={!dailyTask || isResetOpen || !!dailyFocus?.completed_at}
-          >
-            {td("start5")}
-          </button>
-
-          <button 
-            type="button" 
-            className="secondary" 
-            onClick={completeDailyTaskFromCard}
-            disabled={!dailyTask || completeMutation.isPending || !!dailyFocus?.completed_at}
-          >
-            {completeMutation.isPending ? td("loading") : td("done")}
-          </button>
-
-          <button
-            type="button"
-            className="secondary"
-            onClick={refreshDailyTask}
-            disabled={!dailyTask || refreshMutation.isPending || !!dailyFocus?.completed_at}
-            title={td("refreshTaskTitle")}
-          >
-            {refreshMutation.isPending ? td("refreshing") : td("refresh")}
-          </button>
-        </div>
-
-        {!dailyTask && !dailyFocusLoading && (
-          <div style={{ marginTop: 10 }}>
-            <button type="button" className="wow-btn wow-btnPrimary" onClick={() => navigate(ROUTES.ADD_TASK)}>
-              {td("createFirstTask")}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="progress-card">
-        <h3>{td("weeklyProgress")}</h3>
-
-        <div className="stats">
-          <div className="stat">
-            {progressLoading ? "—" : completedTasksCount}
-            <span>{td("tasksLabel")}</span>
-          </div>
-
-          <div className="stat">
-            {progressLoading ? "—" : organizedRoomsCount}
-            <span>{td("roomsLabel")}</span>
-          </div>
-
-          <div className="stat">
-            {progressLoading ? "—" : <>🔥 {streakDays}</>}
-            <span>{td("streakLabel")}</span>
-          </div>
-        </div>
-
-        {!progressLoading && progressSummary && (
-          <>
-            <div className="lifestyle-muted" style={{ fontSize: 12, marginTop: 4 }}>
-              {td("trendCaption")}
-            </div>
-            <div
-              className="progress-trend"
-              role="img"
-              aria-label={td("progressTrendAria")}
-            >
-              {progressSummary.daily_completed_counts.map((d) => {
-                const dayNum = Number(d.date.slice(8, 10)) || 0;
-                const h = Math.max(4, Math.round((d.count / trendMax) * 44));
-                return (
-                  <div key={d.date} className="progress-trend-bar-wrap" title={`${d.date}: ${d.count}`}>
-                    <div className="progress-trend-bar" style={{ height: h }} />
-                    <span className="progress-trend-dow">{dayNum}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {!progressError &&
-              (progressSummary.completed_tasks_this_week ?? 0) === 0 &&
-              (progressSummary.streak_days ?? 0) === 0 && (
-                <p className="lifestyle-muted" style={{ fontSize: 13, margin: 0 }}>
-                  {td("progressEmptyHint")}
-                </p>
-              )}
-          </>
-        )}
-      </div>
-
-      <BeforeAfterTimeline />
-
-      {isResetOpen && (
-        <div className="reset-overlay reset-overlay--challenge" role="dialog" aria-modal="true" aria-labelledby="reset-challenge-title">
-          <div
-            className={`reset-modal reset-modal--challenge${isResetDone ? " reset-modal--completion" : ""}`}
-          >
-            {!isResetDone ? (
-              <>
-                <div id="reset-challenge-title" className="reset-title">
-                  {tc("title")}
-                </div>
-                <p className="reset-focus-line">{tc("focusLine")}</p>
-                {resetSessionRoomRef.current ? (
-                  <div className="reset-room-line">{resetSessionRoomRef.current}</div>
-                ) : null}
-                <div className="reset-task-title">{resetSessionTitleRef.current}</div>
-                <div className="reset-clock" aria-live="polite" aria-atomic="true">
-                  {timerLabel}
-                </div>
-                <p className="reset-mvp-note">{tc("timerMvpNote")}</p>
-                <div className="reset-challenge-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setIsResetPaused((p) => !p)}
-                  >
-                    {isResetPaused ? tc("resume") : tc("pause")}
-                  </button>
-                  <button type="button" className="secondary" onClick={markChallengeFinishedEarly}>
-                    {tc("completeEarly")}
-                  </button>
-                  <button type="button" className="secondary reset-btn-danger" onClick={cancelResetSession}>
-                    {tc("cancelSession")}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="reset-completion">
-                <div className="reset-success-visual" aria-hidden="true">
-                  <span className="reset-success-check">✓</span>
-                </div>
-                <h2 className="reset-completion-title">{tc("greatJob")}</h2>
-                <p className="reset-completion-motivation">{tc("successMotivation")}</p>
-                {resetSessionRoomRef.current ? (
-                  <div className="reset-room-line reset-completion-room">{resetSessionRoomRef.current}</div>
-                ) : null}
-                <div className="reset-task-title reset-completion-task">
-                  {resetSessionTitleRef.current || tc("dailyTaskFallback")}
-                </div>
-                {challengeStatLine ? <div className="reset-stat-pill">{challengeStatLine}</div> : null}
-                {completeSaveFailed ? (
-                  <>
-                    <p className="reset-save-error" role="alert">
-                      {tc("completeSaveError")}
-                    </p>
-                    <div className="reset-completion-actions">
-                      <button
-                        type="button"
-                        className="primary"
-                        onClick={() => void saveChallengeCompletionOnly()}
-                        disabled={completeMutation.isPending}
-                      >
-                        {completeMutation.isPending ? td("loading") : tc("retrySave")}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="reset-completion-actions">
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => void finishChallengeNextTask()}
-                      disabled={completeMutation.isPending || refreshMutation.isPending}
-                    >
-                      {completeMutation.isPending || refreshMutation.isPending ? td("loading") : tc("nextTaskCta")}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => void finishChallengeBackToDashboard()}
-                      disabled={completeMutation.isPending || refreshMutation.isPending}
-                    >
-                      {tc("backDashboardCta")}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
     </div>
   );

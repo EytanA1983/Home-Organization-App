@@ -29,6 +29,9 @@ from app.db.models.emotional_journal import EmotionalJournalEntry
 # Daily focus
 from app.db.models.daily_focus import DailyFocus
 
+# Vision board
+from app.db.models.vision_board import VisionBoard
+
 # Todo (sub-tasks)
 from app.db.models.todo import Todo
 
@@ -73,6 +76,8 @@ __all__ = [
     "EmotionalJournalEntry",
     # Daily focus
     "DailyFocus",
+    # Vision board
+    "VisionBoard",
     # Todo
     "Todo",
     # Notification

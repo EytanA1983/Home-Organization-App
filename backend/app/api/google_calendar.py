@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 import google.auth
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -11,7 +12,7 @@ from app.db.session import get_db
 from app.db.models import User, Task
 from app.api.deps import get_current_user
 from app.config import settings
-from app.schemas.google_calendar import CalendarEvent
+from app.schemas.google_calendar import CalendarEvent, DashboardCalendarAnchor
 
 router = APIRouter(prefix="/google-calendar", tags=["google-calendar"])
 
@@ -35,6 +36,13 @@ def get_google_service(user: User) -> "googleapiclient.discovery.Resource":
 def get_upcoming_events(
     limit: int = 5,
     range: Optional[str] = None,  # "today", "week", or None (default: 30 days)
+    past_days: int = Query(0, ge=0, le=90, description="Include events starting up to N days before now (week grid)"),
+    future_days: Optional[int] = Query(
+        None,
+        ge=1,
+        le=180,
+        description="If set, overrides range-based end; events until now + future_days",
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
@@ -45,6 +53,8 @@ def get_upcoming_events(
     Args:
         limit: מספר מקסימלי של אירועים להחזיר (default: 5)
         range: טווח זמן - "today" (היום), "week" (7 ימים), או None (30 ימים)
+        past_days: הרחבת timeMin אחורה (לתצוגת שבוע עם ימים שעברו)
+        future_days: אם מוגדר, קובע timeMax יחסית לעכשיו (דורס את סוף הטווח לפי range)
         db: Database session
         user: Current authenticated user
     
@@ -57,18 +67,22 @@ def get_upcoming_events(
         # User not connected to Google Calendar
         return []
     
-    # Get events based on range
+    # Get events based on range / explicit window
     now = datetime.utcnow()
-    time_min = now.isoformat() + 'Z'
-    
-    if range == "today":
+    time_min = (now - timedelta(days=past_days)).isoformat() + 'Z'
+
+    if future_days is not None:
+        time_max = (now + timedelta(days=future_days)).isoformat() + 'Z'
+    elif range == "today":
         time_max = (now + timedelta(days=1)).isoformat() + 'Z'
     elif range == "week":
         time_max = (now + timedelta(days=7)).isoformat() + 'Z'
     else:
         # Default: 30 days ahead
         time_max = (now + timedelta(days=30)).isoformat() + 'Z'
-    
+
+    effective_limit = min(max(limit, 1), 500)
+
     try:
         events_result = (
             service.events()
@@ -76,7 +90,7 @@ def get_upcoming_events(
                 calendarId='primary',
                 timeMin=time_min,
                 timeMax=time_max,
-                maxResults=limit,
+                maxResults=effective_limit,
                 singleEvents=True,
                 orderBy='startTime'
             )
@@ -111,6 +125,53 @@ def get_upcoming_events(
         from app.core.logging import logger
         logger.warning(f"Failed to fetch Google Calendar events: {e}", extra={"user_id": user.id})
         return []
+
+
+def _sunday_start_containing(d: date) -> date:
+    """Week starting Sunday containing date `d` (calendar math in the given zone already applied to `d`)."""
+    wd = d.weekday()  # Monday=0 … Sunday=6
+    days_back = (wd + 1) % 7
+    return d - timedelta(days=days_back)
+
+
+@router.get("/dashboard-anchor", response_model=DashboardCalendarAnchor)
+def get_dashboard_calendar_anchor(
+    user: User = Depends(get_current_user),
+):
+    """
+    Primary calendar timezone + today's date + Sun-start week (same basis as FullCalendar when timeZone is set).
+    Dashboard / Vision can align the week strip and subtitles with Google Calendar.
+    """
+    from app.core.logging import logger
+
+    try:
+        service = get_google_service(user)
+    except HTTPException:
+        return DashboardCalendarAnchor(connected=False)
+
+    try:
+        cal = service.calendars().get(calendarId="primary").execute()
+        tz_name = (cal or {}).get("timeZone") or "UTC"
+        z = ZoneInfo(tz_name)
+        today = datetime.now(z).date()
+        week_start = _sunday_start_containing(today)
+        week_dates = [(week_start + timedelta(days=i)).isoformat() for i in range(7)]
+        today_index = (today - week_start).days
+        return DashboardCalendarAnchor(
+            connected=True,
+            time_zone=tz_name,
+            today=today.isoformat(),
+            week_start=week_start.isoformat(),
+            today_day_index=today_index,
+            week_dates=week_dates,
+        )
+    except Exception as e:
+        logger.warning(
+            f"Failed to fetch Google Calendar dashboard anchor: {e}",
+            extra={"user_id": user.id},
+        )
+        return DashboardCalendarAnchor(connected=False)
+
 
 @router.post("/sync-tasks")
 def sync_tasks_to_google(

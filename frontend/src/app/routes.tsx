@@ -17,15 +17,15 @@ import ShoppingListsPage from "../pages/ShoppingListsPage";
 import ShoppingListCreatePage from "../pages/ShoppingListCreatePage";
 import ShoppingListDetailPage from "../pages/ShoppingListDetailPage";
 import CalendarPage from "../pages/CalendarPage";
+import VisionSchedulePage from "../pages/VisionSchedulePage";
 import InventoryPage from "../pages/InventoryPage";
-import EmotionalJournalPage from "../pages/EmotionalJournalPage";
-import ContentHubPage from "../pages/ContentHubPage";
 import { Settings } from "../components/Settings";
 import { ROUTES } from "../utils/routes";
 import { hasTokens } from "../utils/tokenStorage";
 import { smokeDebug } from "../utils/smokeDebug";
 import { useEffect, useState } from "react";
 import { trackPageView } from "../utils/analytics";
+import { useTranslation } from "react-i18next";
 
 // Track page views
 const PageViewTracker = () => {
@@ -40,6 +40,7 @@ const PageViewTracker = () => {
 
 // Catch-all route component that redirects based on auth status
 const CatchAllRoute = () => {
+  const { t } = useTranslation("common");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -72,7 +73,9 @@ const CatchAllRoute = () => {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-cream via-cream/95 to-cream">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-sky mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg font-medium">⏳ טוען…</p>
+          <p className="text-gray-600 text-lg font-medium" dir="auto">
+            ⏳ {t("loading")}
+          </p>
         </div>
       </div>
     );
@@ -161,6 +164,7 @@ export const router = createBrowserRouter([
           </ErrorBoundary>
         ),
       },
+      // Legacy /rooms URLs: redirect or map to categories; see docs/LEGACY-ROOMS-COMPATIBILITY.md
       {
         path: `${ROUTES.ROOMS}/:roomId`,
         element: (
@@ -194,6 +198,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: ROUTES.MY_VISION_BOARD,
+        element: (
+          <ErrorBoundary>
+            <VisionSchedulePage />
+          </ErrorBoundary>
+        ),
+      },
+      {
         path: ROUTES.CALENDAR,
         element: (
           <ErrorBoundary>
@@ -211,19 +223,11 @@ export const router = createBrowserRouter([
       },
       {
         path: ROUTES.EMOTIONAL_JOURNAL,
-        element: (
-          <ErrorBoundary>
-            <EmotionalJournalPage />
-          </ErrorBoundary>
-        ),
+        element: <Navigate to={ROUTES.CATEGORIES} replace />,
       },
       {
         path: ROUTES.CONTENT_HUB,
-        element: (
-          <ErrorBoundary>
-            <ContentHubPage />
-          </ErrorBoundary>
-        ),
+        element: <Navigate to={ROUTES.HOME} replace />,
       },
       {
         path: ROUTES.SHOPPING_LISTS,

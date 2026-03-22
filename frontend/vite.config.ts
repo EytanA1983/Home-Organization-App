@@ -51,7 +51,7 @@ export default defineConfig({
       manifest: {
         name: 'אלי מאור – סידור וארגון הבית',
         short_name: 'אלי מאור',
-        description: 'אפליקציה לניהול ארגון הבית עם משימות, חדרים וקטגוריות',
+        description: 'אפליקציה לניהול ארגון הבית עם משימות וקטגוריות (תאימות לנתיבי חדרים ישנים)',
         lang: 'he',
         dir: 'rtl',
         start_url: '/',
@@ -120,10 +120,10 @@ export default defineConfig({
             icons: [{ src: '/icons/shortcut-add-task.png', sizes: '96x96' }]
           },
           {
-            name: 'החדרים שלי',
-            short_name: 'חדרים',
-            description: 'צפה בכל החדרים',
-            url: '/rooms',
+            name: 'הקטגוריות שלי',
+            short_name: 'קטגוריות',
+            description: 'צפה בכל הקטגוריות',
+            url: '/categories',
             icons: [{ src: '/icons/shortcut-rooms.png', sizes: '96x96' }]
           }
         ]
@@ -171,15 +171,25 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5179,
+    /** If 5179 is busy, Vite picks another port — watch the terminal for the real URL. */
     strictPort: false,
+    /** Open the app in the default browser on `npm run dev` (correct origin for `/api` proxy). */
+    open: true,
     fs: {
       strict: false
     },
     // Vite automatically serves .webmanifest files with correct MIME type
     // The mime-types package (used by Vite) recognizes .webmanifest as application/manifest+json
     proxy: {
+      // Uploaded inventory images (and other static assets served by FastAPI)
+      '/static': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
-        target: 'http://localhost:8000',
+        // 127.0.0.1 avoids Windows resolving `localhost` → IPv6 (::1) while API listens on IPv4 only.
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,  // Changes the origin of the host header to the target URL
         secure: false,  // Allow self-signed certificates if using HTTPS
         // CRITICAL: Do NOT use rewrite - backend expects /api prefix
@@ -193,7 +203,7 @@ export default defineConfig({
         // rewrite: (path) => path.replace(/^\/api/, ''),  // ❌ DON'T USE - backend needs /api
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: 'ws://127.0.0.1:8000',
         ws: true,
         changeOrigin: true,
         secure: false,

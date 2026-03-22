@@ -64,3 +64,9 @@ class InventoryItemRead(InventoryItemBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryPhotoUploadResponse(BaseModel):
+    """Public path served under FastAPI `/static` (same host as API in production)."""
+
+    url: str = Field(..., max_length=500, description="Path e.g. /static/uploads/inventory/{user_id}/{uuid}.jpg")

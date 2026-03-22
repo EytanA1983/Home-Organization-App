@@ -1,7 +1,26 @@
+import { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { router } from './routes';
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../utils/tokenStorage';
+
+/**
+ * Same-tab token changes (login flow dispatches `token-changed` after `queryClient.clear()` + dashboard prefetch).
+ * Avoid invalidating `tasks` / `progress` here — that would force immediate refetches and undo Login prefetch.
+ * Calendar anchor can depend on OAuth token shape; refresh it on token rotation.
+ */
+function TokenChangeQueryInvalidation() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const onTokenChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ['google-calendar'] });
+    };
+    window.addEventListener('token-changed', onTokenChanged);
+    return () => window.removeEventListener('token-changed', onTokenChanged);
+  }, [queryClient]);
+  return null;
+}
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -14,8 +33,20 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  // Another tab changed auth tokens — avoid showing this tab's stale cached user-specific API data.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === ACCESS_TOKEN_KEY || e.key === REFRESH_TOKEN_KEY) {
+        queryClient.clear();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
+      <TokenChangeQueryInvalidation />
       <Toaster 
         position="top-center"
         toastOptions={{

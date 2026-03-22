@@ -14,6 +14,11 @@ export interface Task {
   completed: boolean;
   frequency: "daily" | "weekly" | "monthly";
   scheduledTime: string;
+  /**
+   * Local calendar date (YYYY-MM-DD) when a deferred task should appear next in the week strip.
+   * One-shot: cleared when the week rolls past that date or when the task is completed.
+   */
+  deferredUntilDateKey?: string;
 }
 
 export interface Room {

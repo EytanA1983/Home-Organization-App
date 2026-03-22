@@ -5,7 +5,8 @@ import { showError } from "../utils/toast";
 import { useTranslation } from "react-i18next";
 import type { AxiosError } from "axios";
 import { ROUTES, getCategoryRoute } from "../utils/routes";
-import { isRtlLang } from "../utils/localeDirection";
+import { apiHeOrEn, isRtlLang } from "../utils/localeDirection";
+import TipsMotivationBlock from "../components/TipsMotivationBlock";
 
 type VideoItem = {
   title: string;
@@ -32,12 +33,12 @@ type HubResponse = {
   source: string;
 };
 
-const ROOM_OPTIONS = [
-  { key: "kitchen", he: "מטבח", en: "Kitchen" },
-  { key: "living_room", he: "סלון", en: "Living Room" },
-  { key: "bedroom", he: "חדר שינה", en: "Bedroom" },
-  { key: "closet", he: "ארון", en: "Closet" },
-  { key: "bathroom", he: "אמבטיה", en: "Bathroom" },
+const ROOM_OPTIONS: { key: string; labelKey: string }[] = [
+  { key: "kitchen", labelKey: "filterRoomKitchen" },
+  { key: "living_room", labelKey: "filterRoomLivingRoom" },
+  { key: "bedroom", labelKey: "filterRoomBedroom" },
+  { key: "closet", labelKey: "filterRoomCloset" },
+  { key: "bathroom", labelKey: "filterRoomBathroom" },
 ];
 
 const TS = (prefix: string) => (k: string) => `${prefix}.${k}`;
@@ -45,8 +46,8 @@ const TS = (prefix: string) => (k: string) => `${prefix}.${k}`;
 export default function ContentHubPage() {
   const { i18n, t: tPc } = useTranslation("productCategories");
   const rtl = isRtlLang(i18n.language);
-  const isEnglish = (i18n.resolvedLanguage || i18n.language || "he").startsWith("en");
   const ct = TS("contentSupport");
+  const contentApiLang = apiHeOrEn(i18n.language) === "he" ? "he" : "en";
 
   const [searchParams] = useSearchParams();
   const [room, setRoom] = useState("kitchen");
@@ -58,8 +59,8 @@ export default function ContentHubPage() {
 
   const selectedRoomLabel = useMemo(() => {
     const found = ROOM_OPTIONS.find((x) => x.key === room);
-    return isEnglish ? found?.en : found?.he;
-  }, [room, isEnglish]);
+    return found ? tPc(ct(found.labelKey)) : undefined;
+  }, [room, tPc, i18n.language]);
 
   useEffect(() => {
     const a = searchParams.get("area");
@@ -77,7 +78,7 @@ export default function ContentHubPage() {
           category: category || undefined,
           difficulty: difficulty || undefined,
           max_minutes: maxMinutes ? Number(maxMinutes) : undefined,
-          lang: isEnglish ? "en" : "he",
+          lang: contentApiLang,
         },
       });
       setData(res.data);
@@ -92,7 +93,7 @@ export default function ContentHubPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load defined each render; deps are the filter inputs
-  }, [room, category, difficulty, maxMinutes, isEnglish]);
+  }, [room, category, difficulty, maxMinutes, contentApiLang]);
 
   useEffect(() => {
     setCategory("");
@@ -102,6 +103,8 @@ export default function ContentHubPage() {
 
   return (
     <main className="pageContent" style={{ display: "grid", gap: 16 }} dir={rtl ? "rtl" : "ltr"}>
+      <TipsMotivationBlock />
+
       <section className="lifestyle-card">
         <div className="lifestyle-title">{tPc(ct("pageTitle"))}</div>
         <div className="lifestyle-muted">
@@ -143,7 +146,7 @@ export default function ContentHubPage() {
         <select className="input" value={room} onChange={(e) => setRoom(e.target.value)}>
           {ROOM_OPTIONS.map((option) => (
             <option key={option.key} value={option.key}>
-              {isEnglish ? option.en : option.he}
+              {tPc(ct(option.labelKey))}
             </option>
           ))}
         </select>

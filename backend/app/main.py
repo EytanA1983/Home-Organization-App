@@ -7,7 +7,7 @@ from starlette.responses import Response
 from app.config import settings
 from app.db.base import Base
 from app.db.session import engine
-from app.api import auth, categories, rooms, tasks, todos, google_calendar, notifications, ws, audit, recurring_tasks, statistics, progress, sharing, email, ai, drag_drop, ml, health, csp_report, shopping, content, inventory, emotional_journal, daily_focus, blueprint_aliases
+from app.api import auth, categories, rooms, tasks, todos, google_calendar, notifications, ws, audit, recurring_tasks, statistics, progress, sharing, email, ai, drag_drop, ml, health, csp_report, shopping, content, inventory, emotional_journal, daily_focus, dashboard, vision_board, blueprint_aliases
 from app.api.routes import daily_reset
 from app.services.rate_limiter import rate_limiter
 from app.core.logging import setup_logging, logger, log_request
@@ -73,14 +73,14 @@ async def lifespan(app: FastAPI):
                 "Please run database migrations: 'alembic upgrade head'"
             )
             logger.critical(error_msg)
-            print(f"[STARTUP] ❌ {error_msg}")
+            print(f"[STARTUP] [ERROR] {error_msg}")
             print(f"[STARTUP]    Available tables: {tables}")
             print(f"[STARTUP]    Missing tables: {missing_tables}")
             # Don't raise here - let the app start but log the error
             # Individual endpoints will handle the error gracefully
         else:
-            logger.info("✅ All critical database tables exist", extra={"tables": tables})
-            print(f"[STARTUP] ✅ Database check passed - {len(tables)} tables found")
+            logger.info("[OK] All critical database tables exist", extra={"tables": tables})
+            print(f"[STARTUP] [OK] Database check passed - {len(tables)} tables found")
 
         # DEV SAFETY NET (SQLite only):
         # Keep local SQLite schema compatible when migrations were skipped.
@@ -108,12 +108,84 @@ async def lifespan(app: FastAPI):
                         for col_name in missing_columns:
                             conn.execute(text(required_task_columns_sql[col_name]))
                     logger.info("SQLite compatibility patch applied", extra={"added_columns": missing_columns})
-                    print(f"[STARTUP] ✅ Added missing SQLite tasks columns: {missing_columns}")
+                    print(f"[STARTUP] [OK] Added missing SQLite tasks columns: {missing_columns}")
 
-            # SQLite: create feature tables if migrations / patch script were never run (idempotent).
+            # SQLite: rooms — legacy DBs often miss owner_id / timestamps / is_shared → 500 on GET /api/rooms
+            if engine.url.get_backend_name() == "sqlite" and "rooms" in tables:
+                inspector_rooms = inspect(engine)
+                rc = {c["name"] for c in inspector_rooms.get_columns("rooms")}
+                added_room: list[str] = []
+                with engine.begin() as conn:
+                    if "owner_id" not in rc and "user_id" in rc:
+                        conn.execute(text("ALTER TABLE rooms ADD COLUMN owner_id INTEGER"))
+                        conn.execute(text("UPDATE rooms SET owner_id = user_id WHERE owner_id IS NULL"))
+                        added_room.append("owner_id(from user_id)")
+                        rc.add("owner_id")
+                    for col_name, stmt in (
+                        ("created_at", "ALTER TABLE rooms ADD COLUMN created_at DATETIME"),
+                        ("updated_at", "ALTER TABLE rooms ADD COLUMN updated_at DATETIME"),
+                        ("is_shared", "ALTER TABLE rooms ADD COLUMN is_shared INTEGER DEFAULT 0"),
+                    ):
+                        if col_name not in rc:
+                            conn.execute(text(stmt))
+                            added_room.append(col_name)
+                            rc.add(col_name)
+                    if "owner_id" not in rc:
+                        conn.execute(text("ALTER TABLE rooms ADD COLUMN owner_id INTEGER"))
+                        added_room.append("owner_id")
+                        rc.add("owner_id")
+                    conn.execute(text("UPDATE rooms SET is_shared = 0 WHERE is_shared IS NULL"))
+                    conn.execute(text("UPDATE rooms SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                    conn.execute(text("UPDATE rooms SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                if added_room:
+                    logger.warning("SQLite rooms schema patched", extra={"added_columns": added_room})
+                    print(f"[STARTUP] [OK] SQLite rooms patched: {added_room}")
+
+            # SQLite: token_blocklist + users columns + feature tables (idempotent).
             if engine.url.get_backend_name() == "sqlite" and "users" in tables:
                 inspector_sqlite = inspect(engine)
                 present = set(inspector_sqlite.get_table_names())
+
+                from app.db.models.token_blocklist import TokenBlocklist
+
+                if "token_blocklist" not in present:
+                    TokenBlocklist.__table__.create(bind=engine, checkfirst=True)
+                    logger.info("SQLite: created missing table", extra={"table": "token_blocklist"})
+                    print("[STARTUP] [OK] Created missing SQLite table: token_blocklist")
+                    present.add("token_blocklist")
+
+                from app.db.models.room import RoomShare
+
+                if "room_shares" not in present:
+                    RoomShare.__table__.create(bind=engine, checkfirst=True)
+                    logger.info("SQLite: created missing table", extra={"table": "room_shares"})
+                    print("[STARTUP] [OK] Created missing SQLite table: room_shares")
+                    present.add("room_shares")
+
+                user_cols = {c["name"] for c in inspector_sqlite.get_columns("users")}
+                user_required_sql = {
+                    "is_active": "ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1",
+                    "is_superuser": "ALTER TABLE users ADD COLUMN is_superuser INTEGER DEFAULT 0",
+                    "full_name": "ALTER TABLE users ADD COLUMN full_name VARCHAR",
+                    "google_refresh_token": "ALTER TABLE users ADD COLUMN google_refresh_token VARCHAR",
+                    "created_at": "ALTER TABLE users ADD COLUMN created_at DATETIME",
+                    "updated_at": "ALTER TABLE users ADD COLUMN updated_at DATETIME",
+                }
+                missing_user_cols = [n for n in user_required_sql if n not in user_cols]
+                if missing_user_cols:
+                    logger.warning(
+                        "SQLite users missing columns; applying patch",
+                        extra={"missing_columns": missing_user_cols},
+                    )
+                    with engine.begin() as conn:
+                        for col_name in missing_user_cols:
+                            conn.execute(text(user_required_sql[col_name]))
+                        conn.execute(text("UPDATE users SET is_active = 1 WHERE is_active IS NULL"))
+                        conn.execute(text("UPDATE users SET is_superuser = 0 WHERE is_superuser IS NULL"))
+                        conn.execute(text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                        conn.execute(text("UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                    print(f"[STARTUP] [OK] Added missing SQLite users columns: {missing_user_cols}")
+
                 from app.db.models.emotional_journal import EmotionalJournalEntry
                 from app.db.models.daily_focus import DailyFocus
 
@@ -124,17 +196,17 @@ async def lifespan(app: FastAPI):
                     if tbl not in present:
                         model.__table__.create(bind=engine, checkfirst=True)
                         logger.info("SQLite: created missing table", extra={"table": tbl})
-                        print(f"[STARTUP] ✅ Created missing SQLite table: {tbl}")
+                        print(f"[STARTUP] [OK] Created missing SQLite table: {tbl}")
                         present.add(tbl)
         except Exception as schema_fix_error:
             logger.warning(
                 f"SQLite compatibility patch failed: {schema_fix_error}. "
                 "Run 'alembic upgrade head' manually."
             )
-            print(f"[STARTUP] ⚠️  SQLite compatibility patch failed: {schema_fix_error}")
+            print(f"[STARTUP] [WARN] SQLite compatibility patch failed: {schema_fix_error}")
     except Exception as e:
         logger.warning(f"Could not verify database tables: {e}. This may cause errors if migrations haven't run.")
-        print(f"[STARTUP] ⚠️  Could not verify database tables: {e}")
+        print(f"[STARTUP] [WARN] Could not verify database tables: {e}")
 
     # Initialize cache
     cache_initialized = await init_cache()
@@ -322,7 +394,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     
     # Print full traceback to console for immediate visibility
     print("\n" + "=" * 70)
-    print(f"  ❌ UNHANDLED EXCEPTION - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  [ERROR] UNHANDLED EXCEPTION - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
     print(f"Exception Type: {exc_type}")
     print(f"Exception Message: {exc_msg}")
@@ -413,6 +485,8 @@ app.include_router(audit.router, prefix="/api", tags=["audit"])
 app.include_router(recurring_tasks.router, prefix="/api", tags=["recurring-tasks"])
 app.include_router(statistics.router, prefix="/api", tags=["statistics"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])
+app.include_router(dashboard.router)
+app.include_router(vision_board.router)
 app.include_router(sharing.router, prefix="/api", tags=["sharing"])
 app.include_router(email.router, prefix="/api", tags=["email"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
@@ -451,11 +525,13 @@ setup_prometheus_metrics(app)
 # - Development: Vite serves manifest.webmanifest from frontend/public/ with correct MIME type
 # - Production: NGINX serves manifest.webmanifest with Content-Type: application/manifest+json
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-if os.path.exists(static_dir):
+# Always ensure directory exists so inventory (and other) uploads can be served via /static/...
+try:
+    os.makedirs(static_dir, exist_ok=True)
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     logger.info(f"Static files directory mounted at /static: {static_dir}")
-else:
-    logger.debug(f"Static files directory not found: {static_dir} (this is OK if not needed)")
+except Exception as static_mount_error:
+    logger.warning(f"Could not mount /static: {static_mount_error}")
 
 
 @app.get("/")

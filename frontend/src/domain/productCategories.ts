@@ -24,6 +24,11 @@ export type ProductCategoryKey = (typeof PRODUCT_CATEGORY_KEYS)[number];
 
 export const PRODUCT_CATEGORY_ORDER: readonly ProductCategoryKey[] = PRODUCT_CATEGORY_KEYS;
 
+/** Shown in shell category menu + `/categories` grid; retired keys redirect (e.g. `emotional`). */
+export const PRODUCT_CATEGORY_NAV_ORDER: readonly ProductCategoryKey[] = PRODUCT_CATEGORY_ORDER.filter(
+  (k) => k !== "emotional",
+);
+
 const PRODUCT_CATEGORY_META: Record<
   ProductCategoryKey,
   { emoji: string }

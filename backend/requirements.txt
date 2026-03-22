@@ -3,31 +3,35 @@ fastapi==0.110.0
 uvicorn[standard]==0.27.0
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy==2.0.36
 alembic==1.13.0
 # psycopg2-binary==2.9.9  # Not needed for SQLite - uncomment if using PostgreSQL
 # asyncpg==0.29.0  # Not needed for SQLite - uncomment if using PostgreSQL
 aiosqlite==0.19.0
 
-# Pydantic & Settings
-pydantic==2.5.2
-pydantic-settings==2.1.0
+# Pydantic & Settings (2.10+ has prebuilt wheels for Python 3.13 on Windows)
+pydantic>=2.10.4,<3
+pydantic-settings>=2.6.0,<3
 
 # Auth & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
 fastapi-users[sqlalchemy,oauth]==12.1.2
 httpx-oauth==0.15.0
 
 # Configuration
 python-dotenv==1.0.0
-python-multipart==0.0.7
+# fastapi-users 12.1.2 pins python-multipart==0.0.6
+python-multipart==0.0.6
 email-validator==2.0.0
 
 # Celery & Redis
 celery==5.3.6
-redis==5.0.1
-hiredis==2.2.3
+redis==4.6.0
+# hiredis can require compiling C extensions on Windows (needs MSVC build tools).
+# It's optional for our usage; Redis works fine without it.
+# hiredis==2.2.3
 flower==2.0.1
 
 # Google APIs
@@ -77,4 +81,7 @@ openai==1.12.0
 tiktoken==0.8.0
 
 # GraphQL (Optional)
-strawberry-graphql[fastapi]==0.220.0
+# Disabled in `backend/app/main.py` (GraphQLRouter commented out).
+# Keeping this dependency installed can create pip resolver conflicts on Windows/py313
+# via python-multipart version requirements, blocking backend startup.
+# strawberry-graphql[fastapi]==0.220.0

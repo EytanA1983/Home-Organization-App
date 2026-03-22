@@ -21,9 +21,11 @@ i18n
   .use(initReactI18next)
   .init({
     fallbackLng: {
-      fr: ['en', 'he'],
-      ar: ['en', 'he'],
-      default: ['he'],
+      /** Never fall back to Hebrew for these UI languages (avoids mixed copy). */
+      fr: ['fr', 'en'],
+      ar: ['ar', 'en'],
+      ru: ['ru', 'en'],
+      default: ['he', 'en'],
     },
     supportedLngs: ['he', 'en', 'ru', 'fr', 'ar'],
     defaultNS: 'common',
@@ -55,6 +57,8 @@ i18n
       'emptyStates',
       'errors',
       'home',
+      'inventory',
+      'visionSchedule',
     ],
     resources: {
       he: bundleLocale(heTranslations),

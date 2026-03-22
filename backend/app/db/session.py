@@ -17,7 +17,7 @@ if not settings.DATABASE_URL:
     logger.critical(error_msg)
     raise ValueError(error_msg)
 
-print(f"[DB] 🔍 Initializing database connection...")
+print("[DB] Initializing database connection...")
 print(f"[DB]    DATABASE_URL: {settings.DATABASE_URL[:50] + '...' if len(settings.DATABASE_URL) > 50 else settings.DATABASE_URL}")
 print(f"[DB]    Database type: {'SQLite' if settings.DATABASE_URL.startswith('sqlite') else 'PostgreSQL' if settings.DATABASE_URL.startswith('postgresql') else 'Unknown'}")
 
@@ -47,17 +47,17 @@ try:
     with engine.connect() as conn:
         result = conn.execute(text("SELECT 1"))
         result.fetchone()
-    print(f"[DB] ✅ Database connection successful")
+    print("[DB] Database connection successful")
     
 except SQLAlchemyError as e:
     error_msg = f"Failed to create database engine: {type(e).__name__}: {str(e)}"
     logger.critical(error_msg)
-    print(f"[DB] ❌ ERROR: {error_msg}")
+    print(f"[DB] [ERROR] {error_msg}")
     raise ValueError(f"Database connection failed: {error_msg}") from e
 except Exception as e:
     error_msg = f"Unexpected error creating database engine: {type(e).__name__}: {str(e)}"
     logger.critical(error_msg)
-    print(f"[DB] ❌ ERROR: {error_msg}")
+    print(f"[DB] [ERROR] {error_msg}")
     raise ValueError(f"Database initialization failed: {error_msg}") from e
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -126,11 +126,11 @@ try:
         async_db_url,
         echo=settings.DEBUG,
     )
-    print(f"[DB] ✅ Async database engine created")
+    print("[DB] Async database engine created")
 except Exception as e:
     error_msg = f"Failed to create async database engine: {type(e).__name__}: {str(e)}"
     logger.critical(error_msg)
-    print(f"[DB] ❌ ERROR: {error_msg}")
+    print(f"[DB] [ERROR] {error_msg}")
     raise ValueError(f"Async database initialization failed: {error_msg}") from e
 
 AsyncSessionLocal = async_sessionmaker(

@@ -34,6 +34,7 @@
     "cypress:component": "cypress run --component",
     "e2e": "start-server-and-test 'npm run dev' http://localhost:5179 'npm run cypress:run'",
     "e2e:open": "start-server-and-test 'npm run dev' http://localhost:5179 'npm run cypress'",
+    "branding:trim-logo": "node scripts/trim-brand-logo.mjs",
     "images:optimize": "node scripts/optimize-images.js ./public ./public",
     "images:optimize:check": "node scripts/optimize-images.js ./public ./public --check",
     "images:generate": "node scripts/generate-room-images.js",

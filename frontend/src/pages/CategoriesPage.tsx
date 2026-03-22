@@ -9,7 +9,7 @@ import { showError, showSuccess } from "../utils/toast";
 import InteractiveHouseMap from "../components/InteractiveHouseMap";
 import { isRtlLang } from "../utils/localeDirection";
 import {
-  PRODUCT_CATEGORY_ORDER,
+  PRODUCT_CATEGORY_NAV_ORDER,
   type ProductCategoryKey,
   getProductCategoryEmoji,
   findLegacyRoomForProductCategory,
@@ -24,8 +24,18 @@ export const CategoriesPage = () => {
   const { data: rooms = [], isLoading: loading, refetch } = useRooms();
   const [newAreaName, setNewAreaName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [addAreaOpen, setAddAreaOpen] = useState(false);
 
-  const roomCount = useMemo(() => rooms.length, [rooms]);
+  /** Native tooltip (hover) — full former card copy without cluttering the layout. */
+  const addAreaHoverTitle = useMemo(
+    () =>
+      [
+        tPc("hub.createAreaTitle"),
+        tPc("hub.createAreaSub"),
+        `${tPc("hub.areaNameLabel")}: ${tPc("hub.areaNamePlaceholder")}`,
+      ].join("\n\n"),
+    [tPc],
+  );
 
   const handleCreateArea = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -39,6 +49,7 @@ export const CategoriesPage = () => {
     try {
       await api.post("/rooms", { name });
       setNewAreaName("");
+      setAddAreaOpen(false);
       showSuccess(tRoomsNs("hub.createSuccess"));
       await refetch();
     } catch (error: unknown) {
@@ -80,9 +91,6 @@ export const CategoriesPage = () => {
         <div className="lifestyle-card">
           <div className="lifestyle-title">{tPc("hub.pageTitle")}</div>
           <div className="lifestyle-muted">{tPc("hub.pageSubtitle")}</div>
-          <div className="wow-muted" style={{ marginTop: 10, fontSize: 13 }}>
-            {tPc("hub.legacyHint")}
-          </div>
         </div>
 
         <div className="lifestyle-card">
@@ -97,7 +105,7 @@ export const CategoriesPage = () => {
               gap: 14,
             }}
           >
-            {PRODUCT_CATEGORY_ORDER.map((key: ProductCategoryKey) => {
+            {PRODUCT_CATEGORY_NAV_ORDER.map((key: ProductCategoryKey) => {
               const linked = findLegacyRoomForProductCategory(rooms, key);
               return (
                 <Link
@@ -125,75 +133,72 @@ export const CategoriesPage = () => {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div className="lifestyle-card">
-            <div className="lifestyle-title">{tPc("hub.statsTitle")}</div>
-            <div className="wow-muted">{tPc("hub.statsLinkedAreas")}</div>
-            <div className="wow-title" style={{ fontSize: 32, marginTop: 8 }}>
-              {roomCount}
-            </div>
-          </div>
-          <div className="lifestyle-card">
-            <div className="lifestyle-title">{tPc("hub.ideasTitle")}</div>
-            <div className="wow-muted" style={{ display: "grid", gap: 6, marginTop: 8 }}>
-              <span>• {tPc("hub.idea1")}</span>
-              <span>• {tPc("hub.idea2")}</span>
-              <span>• {tPc("hub.idea3")}</span>
-            </div>
-          </div>
-        </div>
-
         <div className="lifestyle-card">
-          <div className="lifestyle-title">{tPc("hub.createAreaTitle")}</div>
-          <div className="lifestyle-muted" style={{ marginBottom: 12 }}>
-            {tPc("hub.createAreaSub")}
-          </div>
-          <form onSubmit={handleCreateArea} style={{ display: "grid", gap: 10 }}>
-            <label className="label">{tPc("hub.areaNameLabel")}</label>
-            <input
-              className="input"
-              value={newAreaName}
-              onChange={(e) => setNewAreaName(e.target.value)}
-              placeholder={tPc("hub.areaNamePlaceholder")}
-              disabled={creating}
-            />
-            <button type="submit" className="wow-btn wow-btnPrimary" disabled={creating}>
-              {creating ? tRoomsNs("hub.creating") : tPc("hub.createAreaBtn")}
+          <div className="categories-map-card__head">
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <div className="lifestyle-title">{tRoomsNs("hub.mapTitle")}</div>
+              <div className="lifestyle-muted" style={{ marginTop: 6 }}>
+                {tRoomsNs("hub.mapSub")}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="categories-add-area-trigger"
+              title={addAreaHoverTitle}
+              aria-label={addAreaHoverTitle}
+              aria-expanded={addAreaOpen}
+              onClick={() => setAddAreaOpen((open) => !open)}
+            >
+              {tPc("hub.addAreaMinimalCta")}
             </button>
-          </form>
-        </div>
-
-        <div className="lifestyle-card">
-          <div className="lifestyle-title">{tRoomsNs("hub.mapTitle")}</div>
-          <div className="lifestyle-muted" style={{ marginBottom: 14 }}>
-            {tRoomsNs("hub.mapSub")}
           </div>
+
+          {addAreaOpen ? (
+            <form className="categories-add-area-form" onSubmit={handleCreateArea}>
+              <input
+                className="input"
+                value={newAreaName}
+                onChange={(e) => setNewAreaName(e.target.value)}
+                placeholder={tPc("hub.areaNamePlaceholder")}
+                aria-label={tPc("hub.areaNameLabel")}
+                disabled={creating}
+                autoComplete="off"
+                autoFocus
+              />
+              <button type="submit" className="wow-btn wow-btnPrimary" disabled={creating}>
+                {creating ? tRoomsNs("hub.creating") : tPc("hub.createAreaBtn")}
+              </button>
+              <button
+                type="button"
+                className="wow-btn wow-btn--ghost"
+                disabled={creating}
+                onClick={() => {
+                  setAddAreaOpen(false);
+                  setNewAreaName("");
+                }}
+              >
+                {tCommon("cancel")}
+              </button>
+            </form>
+          ) : null}
+
           <InteractiveHouseMap rooms={rooms} />
         </div>
 
         {rooms && rooms.length > 0 && (
-          <>
-            <div className="lifestyle-card">
-              <div className="lifestyle-title">{tPc("hub.linkedCardsTitle")}</div>
-              <div className="lifestyle-muted" style={{ marginBottom: 10 }}>
-                {tPc("hub.linkedCardsSub")}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: 20,
+            }}
+          >
+            {rooms.map((room) => (
+              <div key={room.id} className="lifestyle-card">
+                <RoomCard roomId={room.id} name={room.name} />
               </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: 20,
-              }}
-            >
-              {rooms.map((room) => (
-                <div key={room.id} className="lifestyle-card">
-                  <RoomCard roomId={room.id} name={room.name} />
-                </div>
-              ))}
-            </div>
-          </>
+            ))}
+          </div>
         )}
       </main>
     </div>

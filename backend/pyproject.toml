@@ -20,7 +20,7 @@ python-dotenv = "^1.0.0"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}  # JWT
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 fastapi-users = {extras = ["sqlalchemy", "oauth"], version = "^12.1.2"}
-python-multipart = "^0.0.7"
+python-multipart = ">=0.0.6,<0.0.7"  # fastapi-users 12.1.2 requires 0.0.6
 email-validator = ">=1.1.0,<2.1"
 redis = "^4.5.0"  # Compatible with fastapi-cache2
 fastapi-cache2 = {extras = ["redis"], version = "^0.2.1"}

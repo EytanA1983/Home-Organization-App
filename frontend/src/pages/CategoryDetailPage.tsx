@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { useRooms } from "../hooks/useRooms";
@@ -14,6 +14,11 @@ import {
   isProductCategoryKey,
   type ProductCategoryKey,
 } from "../domain/productCategories";
+import {
+  getTaskLibraryTitle,
+  getTasksByCategory,
+  type TaskLibraryItem,
+} from "../data/taskLibrary";
 
 type RecommendedVideo = {
   videoId: string | null;
@@ -21,6 +26,22 @@ type RecommendedVideo = {
   url: string | null;
   thumbnail: string | null;
 };
+
+/**
+ * Per-category YouTube clips (watch URL → embed id). Keep `embeddedVideoUrl` in sync here so
+ * the iframe never briefly shows a stale/default video while `recommendedVideo` catches up.
+ */
+const CATEGORY_FIXED_YOUTUBE_VIDEO_IDS: Partial<Record<ProductCategoryKey, string>> = {
+  kitchen: "GvknJunh7ro",
+  bathroom_beauty: "G20k6mG5zPU",
+  kids_toys_games: "BlyrFNg1H2M",
+  clothes: "Vxwjd2fCPLw",
+};
+
+function fixedYoutubeIdForCategory(key: ProductCategoryKey | null): string | null {
+  if (!key) return null;
+  return CATEGORY_FIXED_YOUTUBE_VIDEO_IDS[key] ?? null;
+}
 
 type RoomTask = {
   id: number;
@@ -40,6 +61,7 @@ export default function CategoryDetailPage() {
   const { categoryKey: categoryKeyRaw } = useParams<{ categoryKey: string }>();
   const categoryKey = categoryKeyRaw as ProductCategoryKey | undefined;
   const validKey = categoryKey && isProductCategoryKey(categoryKey) ? categoryKey : null;
+  const fixedYoutubeId = fixedYoutubeIdForCategory(validKey);
 
   const { data: rooms = [] } = useRooms();
   const linkedRoom = useMemo(() => {
@@ -68,18 +90,6 @@ export default function CategoryDetailPage() {
     ? getLocalizedRoomTitle(linkedRoom.name, tRooms, { roomId: linkedRoom.id })
     : null;
 
-  const roomEmoji = useMemo(() => {
-    if (!linkedRoom?.name) return getProductCategoryEmoji(validKey || "bedroom");
-    const value = linkedRoom.name.toLowerCase();
-    if (value.includes("מטבח") || value.includes("kitchen")) return "🍳";
-    if (value.includes("סלון") || value.includes("living")) return "🏠";
-    if (value.includes("שינה") || value.includes("bed")) return "🛏️";
-    if (value.includes("ארון") || value.includes("closet")) return "👕";
-    if (value.includes("ילדים") || value.includes("kids")) return "🧸";
-    if (value.includes("מקלחת") || value.includes("bath")) return "🛁";
-    return getProductCategoryEmoji(validKey || "bedroom");
-  }, [linkedRoom?.name, validKey]);
-
   const roomTip = useMemo(() => {
     const cat = inferRoomCategory(linkedRoom?.name || "");
     if (cat === "kitchen") return tRoom("tip_kitchen");
@@ -100,7 +110,33 @@ export default function CategoryDetailPage() {
 
   const completedCount = tasks.filter((task) => task.completed).length;
 
+  const taskLibrarySlices = useMemo(() => {
+    if (!validKey) return { daily: [] as TaskLibraryItem[], monthly: [] as TaskLibraryItem[] };
+    const all = getTasksByCategory(validKey);
+    return {
+      daily: all.filter((i) => i.frequency === "daily"),
+      monthly: all.filter((i) => i.frequency === "monthly"),
+    };
+  }, [validKey]);
+
+  const libraryLang = (i18n.language || "he").split("-")[0] || "he";
+
+  const addTaskHrefForLibraryItem = (item: TaskLibraryItem): string => {
+    const title = getTaskLibraryTitle(item, libraryLang);
+    const q = new URLSearchParams();
+    q.set("title", title);
+    if (hasLinkedRoom && roomIdNum > 0) q.set("roomId", String(roomIdNum));
+    return `${ROUTES.ADD_TASK}?${q.toString()}`;
+  };
+
+  const youtubeWatchUrl = fixedYoutubeId
+    ? `https://www.youtube.com/watch?v=${fixedYoutubeId}`
+    : recommendedVideo?.url || "https://www.youtube.com/@EliMaor555";
+
   const embeddedVideoUrl = useMemo(() => {
+    if (fixedYoutubeId) {
+      return `https://www.youtube.com/embed/${fixedYoutubeId}`;
+    }
     if (recommendedVideo?.videoId) {
       return `https://www.youtube.com/embed/${recommendedVideo.videoId}`;
     }
@@ -111,13 +147,30 @@ export default function CategoryDetailPage() {
       }
     }
     return "https://www.youtube.com/embed/BM5vN7ekfA8";
-  }, [recommendedVideo]);
+  }, [fixedYoutubeId, recommendedVideo]);
 
   useEffect(() => {
-    if (!hasLinkedRoom || !roomIdNum) return;
+    const fixedId = fixedYoutubeIdForCategory(validKey);
+    if (fixedId) {
+      setVideoLoading(false);
+      setRecommendedVideo({
+        videoId: fixedId,
+        title: null,
+        url: `https://www.youtube.com/watch?v=${fixedId}`,
+        thumbnail: null,
+      });
+      return;
+    }
+
+    if (!hasLinkedRoom || !roomIdNum) {
+      setRecommendedVideo(null);
+      setVideoLoading(false);
+      return;
+    }
 
     let isMounted = true;
     setVideoLoading(true);
+    setRecommendedVideo(null);
     api
       .get<RecommendedVideo>("/content/recommended-video", {
         params: { room_id: roomIdNum, lang: videoLang },
@@ -138,7 +191,7 @@ export default function CategoryDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [hasLinkedRoom, roomIdNum, videoLang]);
+  }, [hasLinkedRoom, roomIdNum, videoLang, validKey]);
 
   const toggleTask = async (task: RoomTask) => {
     if (!task?.id || updatingTaskId) return;
@@ -152,6 +205,10 @@ export default function CategoryDetailPage() {
       setUpdatingTaskId(null);
     }
   };
+
+  if (validKey === "emotional") {
+    return <Navigate to={ROUTES.CATEGORIES} replace />;
+  }
 
   if (!validKey) {
     return (
@@ -177,9 +234,7 @@ export default function CategoryDetailPage() {
       <div className="pageOverlay" />
       <main className="pageContent" style={{ display: "grid", gap: 24 }}>
         <div className="lifestyle-card">
-          <div className="lifestyle-title">
-            {roomEmoji} {displayTitle}
-          </div>
+          <div className="lifestyle-title">{displayTitle}</div>
           <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Link className="wow-btn" to={ROUTES.CATEGORIES}>
               {tPc("hub.backToList")}
@@ -198,35 +253,13 @@ export default function CategoryDetailPage() {
           </div>
         </div>
 
-        {validKey === "emotional" ? (
-          <div className="lifestyle-card">
-            <div className="lifestyle-title">{tPc("emotionalCategory.journalCardTitle")}</div>
-            <div className="lifestyle-muted">{tPc("emotionalCategory.journalCardBody")}</div>
-            <div className="lifestyle-muted" style={{ marginTop: 8 }}>
-              {tPc("emotionalCategory.journalPromptHint")}
-            </div>
-            <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Link className="wow-btn wow-btnPrimary" to={ROUTES.EMOTIONAL_JOURNAL}>
-                {tPc("emotionalCategory.openJournalCta")}
-              </Link>
-              <Link className="wow-btn" to={ROUTES.CONTENT_HUB}>
-                {tPc("emotionalCategory.openTipsCta")}
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
         {!hasLinkedRoom ? (
           <div className="lifestyle-card">
-            <div className="lifestyle-title">
-              {validKey === "emotional" ? tPc("emotionalCategory.unlinkedTitle") : tPc("detail.noLinkTitle")}
-            </div>
-            <div className="lifestyle-muted">
-              {validKey === "emotional" ? tPc("emotionalCategory.unlinkedBody") : tPc("detail.noLinkBody")}
-            </div>
+            <div className="lifestyle-title">{tPc("detail.noLinkTitle")}</div>
+            <div className="lifestyle-muted">{tPc("detail.noLinkBody")}</div>
             <div style={{ marginTop: 12 }}>
               <Link className="wow-btn wow-btnPrimary" to={ROUTES.CATEGORIES}>
-                {validKey === "emotional" ? tPc("emotionalCategory.unlinkedCta") : tPc("detail.noLinkCta")}
+                {tPc("detail.noLinkCta")}
               </Link>
             </div>
           </div>
@@ -280,21 +313,115 @@ export default function CategoryDetailPage() {
         )}
 
         <div className="lifestyle-card">
+          <div className="lifestyle-title">{tPc("detail.taskLibraryTitle")}</div>
+          <div className="lifestyle-muted">{tPc("detail.taskLibrarySubtitle")}</div>
+
+          {taskLibrarySlices.daily.length > 0 ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="lifestyle-muted" style={{ fontWeight: 800, marginBottom: 8 }}>
+                {tPc("detail.taskLibraryDaily")}
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {taskLibrarySlices.daily.map((item) => (
+                  <Link
+                    key={item.id}
+                    className="wow-btn"
+                    to={addTaskHrefForLibraryItem(item)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      justifyContent: "space-between",
+                      textAlign: rtl ? "right" : "left",
+                    }}
+                  >
+                    <span style={{ flex: 1 }}>
+                      {getTaskLibraryTitle(item, libraryLang)}
+                      {item.isCore ? (
+                        <span className="lifestyle-muted" style={{ marginInlineStart: 8, fontSize: 12 }}>
+                          ({tPc("detail.taskLibraryCoreBadge")})
+                        </span>
+                      ) : null}
+                    </span>
+                    {item.estimatedMinutes != null ? (
+                      <span className="lifestyle-muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        {tPc("detail.taskLibraryMinutes", { minutes: item.estimatedMinutes })}
+                      </span>
+                    ) : null}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {taskLibrarySlices.monthly.length > 0 ? (
+            <div style={{ marginTop: 16 }}>
+              <div className="lifestyle-muted" style={{ fontWeight: 800, marginBottom: 8 }}>
+                {tPc("detail.taskLibraryMonthly")}
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {taskLibrarySlices.monthly.map((item) => (
+                  <Link
+                    key={item.id}
+                    className="wow-btn"
+                    to={addTaskHrefForLibraryItem(item)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      justifyContent: "space-between",
+                      textAlign: rtl ? "right" : "left",
+                    }}
+                  >
+                    <span style={{ flex: 1 }}>
+                      {getTaskLibraryTitle(item, libraryLang)}
+                      {item.isCore ? (
+                        <span className="lifestyle-muted" style={{ marginInlineStart: 8, fontSize: 12 }}>
+                          ({tPc("detail.taskLibraryCoreBadge")})
+                        </span>
+                      ) : null}
+                    </span>
+                    {item.estimatedMinutes != null ? (
+                      <span className="lifestyle-muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        {tPc("detail.taskLibraryMinutes", { minutes: item.estimatedMinutes })}
+                      </span>
+                    ) : null}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="lifestyle-card">
           <div className="lifestyle-title">{tRoom("tipTitle")}</div>
           <div className="lifestyle-muted">{roomTip}</div>
         </div>
 
-        {hasLinkedRoom && (
+        {(fixedYoutubeId || hasLinkedRoom) && (
           <div className="lifestyle-card" dir={rtl ? "rtl" : "ltr"}>
             <div className="lifestyle-title">{tRoom("videoTitle")}</div>
             <div className="lifestyle-muted" style={{ marginBottom: 12 }}>
-              {tRoom("watchVideoSub")}
+              {hasLinkedRoom ? tRoom("watchVideoSub") : tPc("detail.categoryVideoSub")}
             </div>
-            {videoLoading ? (
+
+            {videoLoading && !fixedYoutubeId ? (
               <div className="wow-skeleton" style={{ height: 180, borderRadius: 16 }} />
             ) : (
               <iframe
-                title={recommendedVideo?.title || tRoom("recommendedAlt")}
+                title={
+                  validKey === "kitchen"
+                    ? tRoom("kitchenCategoryVideoTitle")
+                    : validKey === "bathroom_beauty"
+                      ? tRoom("bathroomCategoryVideoTitle")
+                      : validKey === "kids_toys_games"
+                        ? tRoom("kidsToysGamesCategoryVideoTitle")
+                        : validKey === "clothes"
+                          ? tRoom("clothesCategoryVideoTitle")
+                          : recommendedVideo?.title || tRoom("recommendedAlt")
+                }
                 src={embeddedVideoUrl}
                 className="inspiration-embed"
                 loading="lazy"
@@ -305,13 +432,13 @@ export default function CategoryDetailPage() {
             )}
 
             <a
-              href={recommendedVideo?.url || "https://www.youtube.com/@EliMaor555"}
+              href={youtubeWatchUrl}
               target="_blank"
               rel="noreferrer"
               className="wow-btn"
               style={{ display: "inline-flex", marginTop: 10 }}
             >
-              {tRoom("goToChannel")}
+              {fixedYoutubeId ? tRoom("watchOnYoutubeCta") : tRoom("goToChannel")}
             </a>
           </div>
         )}

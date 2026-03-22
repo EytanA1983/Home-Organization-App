@@ -1,40 +1,44 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./AppLayout.css";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useTasks } from "../hooks/useTasks";
 import { hasTokens } from "../utils/tokenStorage";
-import { ROUTES, getCategoryRoute } from "../utils/routes";
+import { ROUTES } from "../utils/routes";
 import { Modal } from "./Modal";
-import { VisionBoardModal } from "./VisionBoardModal";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { CategoriesNavTab } from "./CategoriesNavTab";
 import type { TaskRead } from "../schemas/task";
 import { isRtlLang } from "../utils/localeDirection";
+import {
+  FOCUS_TASK_PREFIX_MAX_LEN,
+  filterTasksByTitlePrefix,
+  sanitizeFocusTaskPrefix,
+  sortTasksByTitle,
+} from "../utils/taskTitlePrefixMatch";
 
 type ShellTab = {
   id: string;
   labelKey: string;
   path: string;
-  /** Extra paths that keep this tab highlighted (e.g. journal under Emotional category). */
+  /** Extra paths that keep this tab highlighted. */
   aliasPaths?: readonly string[];
 };
 
 const LOCKED_TABS: ShellTab[] = [
   { id: "locked-home", labelKey: "today", path: ROUTES.HOME },
   { id: "locked-categories", labelKey: "categories", path: ROUTES.CATEGORIES },
+  { id: "locked-inventory", labelKey: "inventory", path: ROUTES.INVENTORY },
   { id: "locked-tasks", labelKey: "tasks", path: ROUTES.ALL_TASKS },
-  { id: "locked-calendar", labelKey: "calendar", path: ROUTES.CALENDAR },
-  { id: "locked-emotional", labelKey: "emotional", path: getCategoryRoute("emotional"), aliasPaths: [ROUTES.EMOTIONAL_JOURNAL] },
-  { id: "locked-content", labelKey: "contentHub", path: ROUTES.CONTENT_HUB },
+  { id: "locked-vision", labelKey: "visionScheduleTab", path: ROUTES.MY_VISION_BOARD },
 ];
 
 const CORE_TABS: ShellTab[] = [
   { id: "core-dashboard", labelKey: "dashboard", path: ROUTES.DASHBOARD },
   { id: "core-categories", labelKey: "categories", path: ROUTES.CATEGORIES },
-  { id: "core-calendar", labelKey: "calendar", path: ROUTES.CALENDAR },
-  { id: "core-emotional", labelKey: "emotional", path: getCategoryRoute("emotional"), aliasPaths: [ROUTES.EMOTIONAL_JOURNAL] },
-  { id: "core-content", labelKey: "contentHub", path: ROUTES.CONTENT_HUB },
+  { id: "core-inventory", labelKey: "inventory", path: ROUTES.INVENTORY },
+  { id: "core-vision", labelKey: "visionScheduleTab", path: ROUTES.MY_VISION_BOARD },
 ];
 
 const FOCUS_PRESETS = [5, 10, 15, 25];
@@ -50,14 +54,14 @@ export default function AppLayout() {
   const { t } = useTranslation("layout");
   const { user, logout } = useAuth();
   const isAuthenticated = hasTokens();
-  const { data: completedTasks = [] } = useTasks({ completed: true }, { enabled: isAuthenticated });
   const { data: pendingTasks = [] } = useTasks({ completed: false }, { enabled: isAuthenticated });
   const location = useLocation();
   const navigate = useNavigate();
   const tabsRef = useRef<HTMLElement | null>(null);
-  const [isVisionBoardOpen, setIsVisionBoardOpen] = useState(false);
   const [isFocusModalOpen, setIsFocusModalOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [taskPrefix, setTaskPrefix] = useState("");
+  const focusPrefixInputRef = useRef<HTMLInputElement | null>(null);
   const [durationMin, setDurationMin] = useState(5);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
@@ -65,9 +69,6 @@ export default function AppLayout() {
   const [lastTimerDoneAt, setLastTimerDoneAt] = useState<number | null>(null);
   const coreLang = (i18n.language || "he").split("-")[0];
   const isRtl = isRtlLang(i18n.language);
-  const visionApiLang = coreLang === "he" ? "he" : "en";
-  const dailyTip = t("dailyTipText");
-
   const getTabLabel = (labelKey: string): string => t(labelKey);
 
   useEffect(() => {
@@ -114,9 +115,22 @@ export default function AppLayout() {
   }, [isTimerRunning]);
 
   useEffect(() => {
+    if (!isFocusModalOpen) return;
+    setTaskPrefix("");
+    const id = window.setTimeout(() => focusPrefixInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [isFocusModalOpen]);
+
+  useEffect(() => {
     document.documentElement.lang = coreLang;
     document.documentElement.dir = isRtl ? "rtl" : "ltr";
   }, [coreLang, isRtl]);
+
+  const sortedPendingTasks = useMemo(() => sortTasksByTitle(pendingTasks), [pendingTasks]);
+  const filteredFocusTasks = useMemo(
+    () => filterTasksByTitlePrefix(sortedPendingTasks, taskPrefix),
+    [sortedPendingTasks, taskPrefix],
+  );
 
   const selectedTask = pendingTasks.find((task: TaskRead) => String(task.id) === selectedTaskId);
   const progressPct =
@@ -159,6 +173,9 @@ export default function AppLayout() {
         p.startsWith(`${ROUTES.ROOMS}/`)
       );
     }
+    if (path === ROUTES.MY_VISION_BOARD) {
+      return p === path || p.startsWith(`${path}/`);
+    }
     return p === path || p.startsWith(`${path}/`);
   };
 
@@ -180,13 +197,6 @@ export default function AppLayout() {
           <div className="app-actions">
             {user && (
               <>
-                <button
-                  type="button"
-                  className="pill-btn pill-btn-accent"
-                  onClick={() => setIsVisionBoardOpen(true)}
-                >
-                  {t("visionBoardBtn")}
-                </button>
                 <button type="button" className="pill-btn" onClick={() => setIsFocusModalOpen(true)}>
                   {t("focusTimerBtn")}
                 </button>
@@ -203,17 +213,36 @@ export default function AppLayout() {
         <div className="app-container" style={{ paddingTop: 10, paddingBottom: 10 }}>
           <nav ref={tabsRef} className="roomsTabs" aria-label={t("mainNavigation")}>
             {isAuthenticated
-              ? CORE_TABS.map((tab) => (
-                  <Link
-                    key={tab.id}
-                    to={tab.path}
-                    className={`roomTab ${isShellTabActive(tab) ? "roomTabActive" : ""}`}
-                  >
-                    {getTabLabel(tab.labelKey)}
-                  </Link>
-                ))
+              ? CORE_TABS.map((tab) =>
+                  tab.path === ROUTES.CATEGORIES ? (
+                    <CategoriesNavTab
+                      key={tab.id}
+                      authenticated
+                      tabLabel={getTabLabel(tab.labelKey)}
+                      isActive={isShellTabActive(tab)}
+                    />
+                  ) : (
+                    <Link
+                      key={tab.id}
+                      to={tab.path}
+                      className={`roomTab ${isShellTabActive(tab) ? "roomTabActive" : ""}`}
+                    >
+                      {getTabLabel(tab.labelKey)}
+                    </Link>
+                  ),
+                )
               : LOCKED_TABS.map((tab) => {
                   const isActive = isShellTabActive(tab);
+                  if (tab.path === ROUTES.CATEGORIES) {
+                    return (
+                      <CategoriesNavTab
+                        key={tab.id}
+                        authenticated={false}
+                        tabLabel={getTabLabel(tab.labelKey)}
+                        isActive={isActive}
+                      />
+                    );
+                  }
                   return (
                     <button
                       key={tab.id}
@@ -230,12 +259,6 @@ export default function AppLayout() {
         </div>
       </div>
 
-      <VisionBoardModal
-        isOpen={isVisionBoardOpen}
-        onClose={() => setIsVisionBoardOpen(false)}
-        apiLang={visionApiLang}
-      />
-
       {isFocusModalOpen && (
         <Modal title={t("focusTitle")} onClose={() => setIsFocusModalOpen(false)}>
           <div className="focusTimerWrap" dir={isRtl ? "rtl" : "ltr"}>
@@ -243,21 +266,88 @@ export default function AppLayout() {
               {t("focusIntro")}
             </p>
 
-            <label className="focusTimerLabel" htmlFor="focus-task-select">{t("focusTask")}</label>
-            <select
-              id="focus-task-select"
-              className="focusTimerSelect"
-              value={selectedTaskId}
-              onChange={(event) => setSelectedTaskId(event.target.value)}
-              disabled={isTimerRunning}
-            >
-              <option value="">{t("focusManual")}</option>
-              {pendingTasks.slice(0, 20).map((task: TaskRead) => (
-                <option key={task.id} value={String(task.id)}>
-                  {task.title}
-                </option>
-              ))}
-            </select>
+            <div className="focusTaskPicker">
+              <label className="focusTimerLabel" htmlFor="focus-task-prefix">
+                {t("focusTask")}
+              </label>
+              <p className="focusTaskPickerHint" id="focus-task-prefix-hint">
+                {t("focusPrefixHint")}
+              </p>
+              <div className="focusTaskPrefixRow">
+                <input
+                  ref={focusPrefixInputRef}
+                  id="focus-task-prefix"
+                  type="text"
+                  className="focusTaskPrefixInput"
+                  value={taskPrefix}
+                  maxLength={FOCUS_TASK_PREFIX_MAX_LEN}
+                  autoComplete="off"
+                  spellCheck={false}
+                  inputMode="text"
+                  placeholder={t("focusPrefixPlaceholder")}
+                  aria-describedby="focus-task-prefix-hint"
+                  disabled={isTimerRunning}
+                  onChange={(e) =>
+                    setTaskPrefix(sanitizeFocusTaskPrefix(e.target.value, FOCUS_TASK_PREFIX_MAX_LEN))
+                  }
+                />
+                <button
+                  type="button"
+                  className="focusTaskPrefixClear"
+                  onClick={() => setTaskPrefix("")}
+                  disabled={isTimerRunning || !taskPrefix}
+                >
+                  {t("focusClearPrefix")}
+                </button>
+              </div>
+              <div
+                className="focusTaskList"
+                role="listbox"
+                aria-label={t("focusTaskListAria")}
+                id="focus-task-listbox"
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selectedTaskId === ""}
+                  className={`focusTaskRow ${selectedTaskId === "" ? "focusTaskRowActive" : ""}`}
+                  disabled={isTimerRunning}
+                  onClick={() => setSelectedTaskId("")}
+                >
+                  <span className="focusTaskRowTitle">{t("focusManual")}</span>
+                </button>
+                {filteredFocusTasks.map((task: TaskRead) => {
+                  const roomName = task.room?.name?.trim();
+                  const catName = task.category?.name?.trim();
+                  const sub = [roomName, catName].filter(Boolean).join(" · ");
+                  const idStr = String(task.id);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedTaskId === idStr}
+                      className={`focusTaskRow ${selectedTaskId === idStr ? "focusTaskRowActive" : ""}`}
+                      disabled={isTimerRunning}
+                      onClick={() => setSelectedTaskId(idStr)}
+                    >
+                      <span className="focusTaskRowTitle">{task.title}</span>
+                      {sub ? <span className="focusTaskRowSub">{sub}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+              {filteredFocusTasks.length === 0 && sortedPendingTasks.length > 0 ? (
+                <p className="focusTaskNoMatches" role="status">
+                  {t("focusNoMatches")}
+                </p>
+              ) : null}
+              {sortedPendingTasks.length === 0 ? (
+                <p className="focusTaskNoMatches" role="status">
+                  {t("focusNoOpenTasks")}
+                </p>
+              ) : null}
+            </div>
 
             <div className="focusTimerPresets" aria-label={t("focusDuration")}>
               {FOCUS_PRESETS.map((mins) => (
@@ -307,30 +397,6 @@ export default function AppLayout() {
       )}
 
       <div className="app-container">
-        <section className="brandStrip wow-card wow-pad wow-fadeIn" dir={isRtl ? "rtl" : "ltr"} aria-label={t("brandAriaLabel")}>
-          <div className="brandStripTop">
-            <div>
-              <div className="wow-title brandSlogan">{t("brandTitle")}</div>
-              <p className="wow-muted brandSubline">
-                {t("brandSubline")}
-              </p>
-            </div>
-          </div>
-
-          <div className="brandMetaRow">
-            <div className="brandMetaCard">
-              <span className="wow-chip wow-chipAccent">{t("dailyTipLabel")}</span>
-              <p className="brandMetaText">{dailyTip}</p>
-            </div>
-            <div className="brandMetaCard">
-              <span className="wow-chip">{t("progressSoft")}</span>
-              <p className="brandMetaText">
-                {t("progressText", { count: completedTasks.length })}
-              </p>
-            </div>
-          </div>
-        </section>
-
         <Outlet />
       </div>
 

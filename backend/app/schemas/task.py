@@ -75,6 +75,12 @@ class TaskRead(TaskBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TaskTitleSuggestions(BaseModel):
+    """Distinct task titles for the current user, prefix-filtered (add-task picker)."""
+
+    titles: List[str] = Field(default_factory=list, description="Unique titles starting with prefix")
+
+
 class TaskList(BaseModel):
     """Schema for list of tasks with pagination info"""
     items: List[TaskRead]

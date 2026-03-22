@@ -9,11 +9,14 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import heLocale from '@fullcalendar/core/locales/he';
+import frLocale from '@fullcalendar/core/locales/fr';
+import arLocale from '@fullcalendar/core/locales/ar';
+import ruLocale from '@fullcalendar/core/locales/ru';
 import { EventInput, DateSelectArg, EventChangeArg } from '@fullcalendar/core';
 import axios from 'axios';
 import api from '../api';
 import { useTranslation } from 'react-i18next';
-import { apiHeOrEn, isRtlLang } from '../utils/localeDirection';
+import { baseLanguageCode, isRtlLang } from '../utils/localeDirection';
 import { useVoice } from '../hooks/useVoice';
 import { showError, showPromise, showInfo } from '../utils/toast';
 import { CalendarEvent } from '../schemas/calendar';
@@ -60,7 +63,9 @@ export const CalendarPage: React.FC = () => {
   const [calendarUnavailable, setCalendarUnavailable] = useState(false);
   const [view, setView] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay' | 'listWeek'>('dayGridMonth');
   const calendarRef = useRef<FullCalendar | null>(null);
-  const calendarLocale = apiHeOrEn(i18n.language) === 'he' ? 'he' : 'en';
+  const baseLang = baseLanguageCode(i18n.language);
+  const calendarLocale =
+    baseLang === 'he' ? 'he' : baseLang === 'fr' ? 'fr' : baseLang === 'ar' ? 'ar' : baseLang === 'ru' ? 'ru' : 'en';
   const calendarDirection = isRtlLang(i18n.language) ? 'rtl' : 'ltr';
 
   const handleViewChange = (nextView: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay' | 'listWeek') => {
@@ -407,7 +412,7 @@ export const CalendarPage: React.FC = () => {
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-          locales={[heLocale]}
+          locales={[heLocale, frLocale, arLocale, ruLocale]}
           initialView="dayGridMonth"
           headerToolbar={{
             left: 'prev,next today',
