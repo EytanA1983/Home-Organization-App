@@ -293,9 +293,22 @@ export default function Dashboard() {
     return () => window.clearTimeout(t);
   }, [sessionUserId]);
 
+  /**
+   * Full session + server task bootstrap.
+   * IMPORTANT: Do not depend on `i18n.language` here. i18next often emits a resolved language
+   * shortly after first paint; re-running this effect would call `setLoading(true)` again, race
+   * `stillCurrent()` / Strict Mode, and leave the task list + progress card stuck in skeleton or
+   * empty until a later route remount (e.g. Categories → Dashboard). Language-only updates are
+   * handled in a separate effect below.
+   */
   useEffect(() => {
     const runId = ++dashboardHydrationRunIdRef.current;
     const perfStart = performance.now();
+    const authSnap = authVersion;
+
+    if (import.meta.env.DEV) {
+      console.debug("[dashboard:bootstrap] effect run", { runId, authVersion: authSnap });
+    }
 
     const loadUser = async () => {
       setLoading(true);
@@ -449,6 +462,8 @@ export default function Dashboard() {
         }
 
         if (!stillCurrent()) return;
+        /** Drop rolling-window ids from any previous session / empty first layout — avoids stale `{ daily: [] }` winning over eligible tasks on first paint. */
+        setVisibleIdsByDay({});
         dashboardPerfDebug("sessionUserId + local tasks", perfStart);
       } catch (error) {
         console.error("[Dashboard] Error fetching user:", error);
@@ -461,12 +476,28 @@ export default function Dashboard() {
         if (runId === dashboardHydrationRunIdRef.current) {
           setLoading(false);
           dashboardPerfDebug("dashboard bootstrap complete", perfStart);
+          if (import.meta.env.DEV) {
+            console.debug("[dashboard:bootstrap] complete", {
+              runId,
+              authVersion: authSnap,
+              sessionUserId: sessionUserIdRef.current,
+            });
+          }
         }
       }
     };
 
     void loadUser();
-  }, [i18n.language, navigate, authVersion, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18n handled separately; including i18n.language causes double-bootstrap (see effect comment).
+  }, [navigate, authVersion, queryClient]);
+
+  /** Re-apply demo-task title localization when the UI language changes (no server re-fetch). */
+  useEffect(() => {
+    setTasks((prev) => {
+      if (prev.length === 0) return prev;
+      return localizeDemoTaskTitles(prev, i18n.language);
+    });
+  }, [i18n.language]);
 
   useEffect(() => {
     if (loading) {
@@ -625,12 +656,38 @@ export default function Dashboard() {
   }, [dailyEligibleWithRefill, monthlyEligibleWithRefill, daySlotKey, tasks, libSchedule]);
 
   const visibleIdsForSlot = useMemo((): DayBucketIds => {
+    const fallbackDaily = reconcileVisibleTaskIds(
+      dailyEligibleWithRefill,
+      undefined,
+      DASHBOARD_DAILY_BUCKET_CAP,
+    );
+    const fallbackMonthly = reconcileVisibleTaskIds(
+      monthlyEligibleWithRefill,
+      undefined,
+      DASHBOARD_MONTHLY_BUCKET_CAP,
+    );
+
     const fromState = visibleIdsByDay[daySlotKey];
-    if (fromState) return fromState;
-    return {
-      daily: reconcileVisibleTaskIds(dailyEligibleWithRefill, undefined, DASHBOARD_DAILY_BUCKET_CAP),
-      monthly: reconcileVisibleTaskIds(monthlyEligibleWithRefill, undefined, DASHBOARD_MONTHLY_BUCKET_CAP),
-    };
+    if (!fromState) {
+      return { daily: fallbackDaily, monthly: fallbackMonthly };
+    }
+
+    /**
+     * First paint race: `useLayoutEffect` may persist `{ daily: [], monthly: [] }` while `tasks` was
+     * still empty; `useMemo` then prefers that object over recomputing from `dailyEligibleWithRefill`.
+     * Navigating away (e.g. Categories) remounts and clears state — user sees tasks. Treat “stored
+     * empty bucket + non-empty eligible pool” as stale and derive from the pool until layout syncs.
+     */
+    const staleDaily = dailyEligibleWithRefill.length > 0 && fromState.daily.length === 0;
+    const staleMonthly = monthlyEligibleWithRefill.length > 0 && fromState.monthly.length === 0;
+    if (staleDaily || staleMonthly) {
+      return {
+        daily: staleDaily ? fallbackDaily : fromState.daily,
+        monthly: staleMonthly ? fallbackMonthly : fromState.monthly,
+      };
+    }
+
+    return fromState;
   }, [visibleIdsByDay, daySlotKey, dailyEligibleWithRefill, monthlyEligibleWithRefill]);
 
   const librarySyntheticTasks = useMemo(() => {

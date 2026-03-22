@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DailyTasksPopup } from "../components/DailyTasksPopup";
 import { WeeklyTasksWidget } from "../components/WeeklyTasksWidget";
@@ -15,6 +15,7 @@ import { getProgressSummary } from "../api";
 import type { ProgressSummaryRead } from "../schemas/progress";
 import type { TaskRead } from "../schemas/task";
 import { readDashboardDemoTasksFromStorage } from "../utils/dashboardLocalTasksStorage";
+import { hasTokens } from "../utils/tokenStorage";
 
 export const HomePage = () => {
   const { t, i18n } = useTranslation("home");
@@ -22,7 +23,15 @@ export const HomePage = () => {
   const location = useLocation();
   const dirAttr = isRtlLang(i18n.language) ? "rtl" : "ltr";
   const { data: rooms = [], isLoading: loading } = useRooms();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, checkAuth } = useAuth();
+
+  /** Same-tab login can navigate here before `useAuth` finishes `checkAuth` — unblock chart/tasks queries. */
+  useEffect(() => {
+    if (!hasTokens()) return;
+    if (user != null) return;
+    if (authLoading) return;
+    void checkAuth();
+  }, [user, authLoading, checkAuth]);
 
   const userId = useMemo(() => {
     const id = user?.id;

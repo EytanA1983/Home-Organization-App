@@ -59,6 +59,7 @@ export const WeeklyTasksWidget = () => {
         setLoading(false);
         return;
       }
+      setLoading(true);
       setAuthMissing(false);
       setLoadError(false);
       try {
@@ -80,7 +81,20 @@ export const WeeklyTasksWidget = () => {
         setLoading(false);
       }
     };
-    load();
+
+    const run = () => {
+      void load();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "token" || e.key === "refresh_token") run();
+    };
+    window.addEventListener("token-changed", run);
+    window.addEventListener("storage", onStorage);
+    run();
+    return () => {
+      window.removeEventListener("token-changed", run);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const complete = async (taskId: number) => {

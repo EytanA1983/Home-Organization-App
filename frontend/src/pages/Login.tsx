@@ -173,15 +173,27 @@ export default function Login() {
               queryFn: fetchDashboardTasksFullList,
               staleTime: DASHBOARD_QUERY_STALE_MS,
             }),
+            // Dashboard `useQuery` chart slices key — warm cache before first `/dashboard` mount.
+            queryClient.prefetchQuery({
+              queryKey: ["tasks", "chartSlices", uid],
+              queryFn: fetchDashboardTasksFullList,
+              staleTime: DASHBOARD_QUERY_STALE_MS,
+            }),
           ]);
         } catch (prefetchErr) {
           console.warn("[Login] Dashboard prefetch failed (non-fatal):", prefetchErr);
         }
       }
 
+      if (import.meta.env.DEV) {
+        console.debug("[login] prefetch done, dispatching token-changed", { uid: Number.isFinite(uid) ? uid : null });
+      }
+
       window.dispatchEvent(new Event("token-changed"));
 
-      const from = (location.state as { from?: string })?.from ?? ROUTES.HOME;
+      // Default to full task board — matches primary tab "My task board" and avoids Home (`/`)
+      // widgets that only fetch once on mount (`WeeklyTasksWidget`, `DailyTasksPopup`).
+      const from = (location.state as { from?: string })?.from ?? ROUTES.DASHBOARD;
       smokeDebug("login:navigate", { to: from });
       navigate(from, { replace: true });
     } catch (err: unknown) {
