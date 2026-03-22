@@ -1,0 +1,105 @@
+# Production Values for Eli Maor Helm Chart
+# Use with: helm install eli-maor ./helm/eli-maor -f values-production.yaml
+
+global:
+  environment: production
+
+backend:
+  replicaCount: 3
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+worker:
+  replicaCount: 3
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+
+frontend:
+  replicaCount: 3
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: eli-maor.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /ws
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: eli-maor-tls
+      hosts:
+        - eli-maor.example.com
+
+postgresql:
+  enabled: true
+  auth:
+    username: eli_maor
+    database: eli_maor
+  primary:
+    persistence:
+      size: 50Gi
+    resources:
+      limits:
+        cpu: "2"
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+redis:
+  enabled: true
+  master:
+    persistence:
+      size: 10Gi
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+config:
+  ENVIRONMENT: production
+  DEBUG: "false"
+  LOG_LEVEL: WARNING
+  CACHE_ENABLED: "true"
+  OTEL_TRACING_ENABLED: "true"

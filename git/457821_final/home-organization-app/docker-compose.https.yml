@@ -1,0 +1,30 @@
+version: '3.8'
+
+# HTTPS configuration override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.https.yml up
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: home_org_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - home_org_network
+
+  backend:
+    environment:
+      - HTTPS_ENABLED=true
+    expose:
+      - "8000"
+
+  frontend:
+    expose:
+      - "3000"

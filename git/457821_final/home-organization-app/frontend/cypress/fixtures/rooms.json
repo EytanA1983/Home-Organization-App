@@ -1,0 +1,47 @@
+{
+  "livingRoom": {
+    "name": "סלון",
+    "expectedEmoji": "🛋️",
+    "expectedType": "living"
+  },
+  "kitchen": {
+    "name": "מטבח",
+    "expectedEmoji": "🍳",
+    "expectedType": "kitchen"
+  },
+  "bedroom": {
+    "name": "חדר שינה",
+    "expectedEmoji": "🛏️",
+    "expectedType": "bedroom"
+  },
+  "bathroom": {
+    "name": "אמבטיה ושירותים",
+    "expectedEmoji": "🚿",
+    "expectedType": "bathroom"
+  },
+  "office": {
+    "name": "חדר עבודה",
+    "expectedEmoji": "💼",
+    "expectedType": "office"
+  },
+  "balcony": {
+    "name": "מרפסת",
+    "expectedEmoji": "🌿",
+    "expectedType": "balcony"
+  },
+  "kidsRoom": {
+    "name": "חדר ילדים",
+    "expectedEmoji": "🧸",
+    "expectedType": "kids"
+  },
+  "laundry": {
+    "name": "מכבסה",
+    "expectedEmoji": "🧺",
+    "expectedType": "laundry"
+  },
+  "garage": {
+    "name": "מוסך",
+    "expectedEmoji": "🚗",
+    "expectedType": "garage"
+  }
+}

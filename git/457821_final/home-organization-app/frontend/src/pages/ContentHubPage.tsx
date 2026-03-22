@@ -1,0 +1,214 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import api from "../api";
+import { showError } from "../utils/toast";
+import { useTranslation } from "react-i18next";
+import type { AxiosError } from "axios";
+import { ROUTES, getCategoryRoute } from "../utils/routes";
+import { apiHeOrEn, isRtlLang } from "../utils/localeDirection";
+import TipsMotivationBlock from "../components/TipsMotivationBlock";
+
+type VideoItem = {
+  title: string;
+  category: string;
+  difficulty: string;
+  time_minutes: number;
+  tip: string;
+  example: string;
+  video: string;
+};
+
+type HubResponse = {
+  room: string | null;
+  category: string | null;
+  difficulty: string | null;
+  max_minutes: number | null;
+  items: VideoItem[];
+  taxonomy: {
+    rooms: string[];
+    categories: string[];
+    difficulty: string[];
+    time: number[];
+  };
+  source: string;
+};
+
+const ROOM_OPTIONS: { key: string; labelKey: string }[] = [
+  { key: "kitchen", labelKey: "filterRoomKitchen" },
+  { key: "living_room", labelKey: "filterRoomLivingRoom" },
+  { key: "bedroom", labelKey: "filterRoomBedroom" },
+  { key: "closet", labelKey: "filterRoomCloset" },
+  { key: "bathroom", labelKey: "filterRoomBathroom" },
+];
+
+const TS = (prefix: string) => (k: string) => `${prefix}.${k}`;
+
+export default function ContentHubPage() {
+  const { i18n, t: tPc } = useTranslation("productCategories");
+  const rtl = isRtlLang(i18n.language);
+  const ct = TS("contentSupport");
+  const contentApiLang = apiHeOrEn(i18n.language) === "he" ? "he" : "en";
+
+  const [searchParams] = useSearchParams();
+  const [room, setRoom] = useState("kitchen");
+  const [category, setCategory] = useState("");
+  const [difficulty, setDifficulty] = useState("");
+  const [maxMinutes, setMaxMinutes] = useState("");
+  const [data, setData] = useState<HubResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const selectedRoomLabel = useMemo(() => {
+    const found = ROOM_OPTIONS.find((x) => x.key === room);
+    return found ? tPc(ct(found.labelKey)) : undefined;
+  }, [room, tPc, i18n.language]);
+
+  useEffect(() => {
+    const a = searchParams.get("area");
+    if (a && ROOM_OPTIONS.some((o) => o.key === a)) {
+      setRoom(a);
+    }
+  }, [searchParams]);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<HubResponse>("/content/engine", {
+        params: {
+          room,
+          category: category || undefined,
+          difficulty: difficulty || undefined,
+          max_minutes: maxMinutes ? Number(maxMinutes) : undefined,
+          lang: contentApiLang,
+        },
+      });
+      setData(res.data);
+    } catch (err) {
+      const axiosError = err as AxiosError<{ detail?: string }>;
+      showError(axiosError?.response?.data?.detail ?? tPc(ct("loadFail")));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load defined each render; deps are the filter inputs
+  }, [room, category, difficulty, maxMinutes, contentApiLang]);
+
+  useEffect(() => {
+    setCategory("");
+    setDifficulty("");
+    setMaxMinutes("");
+  }, [room]);
+
+  return (
+    <main className="pageContent" style={{ display: "grid", gap: 16 }} dir={rtl ? "rtl" : "ltr"}>
+      <TipsMotivationBlock />
+
+      <section className="lifestyle-card">
+        <div className="lifestyle-title">{tPc(ct("pageTitle"))}</div>
+        <div className="lifestyle-muted">
+          {tPc(ct("pageSubtitle"))}
+          {selectedRoomLabel ? ` • ${selectedRoomLabel}` : ""}
+        </div>
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Link className="wow-btn wow-btnPrimary" to={ROUTES.CATEGORIES}>
+            {tPc(ct("browseCategories"))}
+          </Link>
+        </div>
+        <div className="lifestyle-muted" style={{ marginTop: 14, fontWeight: 600 }}>
+          {tPc(ct("quickPicksLabel"))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=kitchen`}>
+            {tPc(ct("quickKitchen"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=closet`}>
+            {tPc(ct("quickCloset"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=bedroom`}>
+            {tPc(ct("quickBedroom"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=bathroom`}>
+            {tPc(ct("quickBathroom"))}
+          </Link>
+          <Link className="wow-btn" to={`${ROUTES.CONTENT_HUB}?area=living_room`}>
+            {tPc(ct("quickLiving"))}
+          </Link>
+          <Link className="wow-btn" to={getCategoryRoute("emotional")}>
+            {tPc(ct("quickEmotional"))}
+          </Link>
+        </div>
+      </section>
+
+      <section className="lifestyle-card" style={{ display: "grid", gap: 10 }}>
+        <label className="label">{tPc(ct("filterAreaLabel"))}</label>
+        <select className="input" value={room} onChange={(e) => setRoom(e.target.value)}>
+          {ROOM_OPTIONS.map((option) => (
+            <option key={option.key} value={option.key}>
+              {tPc(ct(option.labelKey))}
+            </option>
+          ))}
+        </select>
+
+        <label className="label">{tPc(ct("taxonomyCategory"))}</label>
+        <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">{tPc(ct("all"))}</option>
+          {(data?.taxonomy.categories || []).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+
+        <label className="label">{tPc(ct("difficulty"))}</label>
+        <select className="input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+          <option value="">{tPc(ct("all"))}</option>
+          {(data?.taxonomy.difficulty || []).map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+
+        <label className="label">{tPc(ct("maxTime"))}</label>
+        <select className="input" value={maxMinutes} onChange={(e) => setMaxMinutes(e.target.value)}>
+          <option value="">{tPc(ct("all"))}</option>
+          {(data?.taxonomy.time || []).map((m) => (
+            <option key={m} value={String(m)}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      <section className="lifestyle-card">
+        {loading ? (
+          <div className="wow-skeleton" style={{ height: 120 }} />
+        ) : !data?.items?.length ? (
+          <div className="wow-muted">{tPc(ct("empty"))}</div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {data.items.map((item, idx) => (
+              <article key={`${item.title}-${idx}`} className="wow-card wow-pad" style={{ display: "grid", gap: 8 }}>
+                <div className="wow-title" style={{ fontSize: 18 }}>
+                  {item.title}
+                </div>
+                <div className="wow-muted">
+                  {item.category} • {item.difficulty} • {item.time_minutes}m
+                </div>
+                <div className="wow-muted">{item.tip}</div>
+                <div style={{ fontWeight: 700, color: "#4A2BC7" }}>{item.example}</div>
+                <div>
+                  <a className="wow-btn wow-btnPrimary" href={item.video} target="_blank" rel="noreferrer">
+                    {tPc(ct("watch"))}
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}

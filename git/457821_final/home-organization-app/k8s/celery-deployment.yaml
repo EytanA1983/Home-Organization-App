@@ -1,0 +1,183 @@
+# Kubernetes Deployment for Celery Worker and Beat
+# With rollback strategy
+#
+# Rollback:
+#   kubectl rollout undo deployment/eli-maor-worker
+#   kubectl rollout undo deployment/eli-maor-beat
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eli-maor-worker
+  labels:
+    app: eli-maor
+    component: worker
+  annotations:
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  replicas: 2
+
+  # ==================== Rollback Strategy ====================
+  revisionHistoryLimit: 10
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: worker
+
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: worker
+    spec:
+      # Long termination for task completion
+      terminationGracePeriodSeconds: 120
+
+      containers:
+        - name: worker
+          image: eli-maor-backend:latest
+          imagePullPolicy: Always
+
+          command:
+            - celery
+            - -A
+            - app.workers.celery_app.celery
+            - worker
+            - --loglevel=info
+            - --concurrency=2
+
+          envFrom:
+            - configMapRef:
+                name: eli-maor-config
+            - secretRef:
+                name: eli-maor-secrets
+
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - celery -A app.workers.celery_app.celery inspect ping -d celery@$HOSTNAME
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - celery -A app.workers.celery_app.celery inspect ping -d celery@$HOSTNAME
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 20
+            failureThreshold: 3
+
+          # Graceful shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "celery -A app.workers.celery_app.celery control cancel_consumer -d celery@$HOSTNAME && sleep 30"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eli-maor-beat
+  labels:
+    app: eli-maor
+    component: beat
+  annotations:
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  # Only ONE beat scheduler should run
+  replicas: 1
+
+  # ==================== Rollback Strategy ====================
+  revisionHistoryLimit: 5
+
+  # Recreate strategy ensures only one beat runs
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: beat
+
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: beat
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: beat
+          image: eli-maor-backend:latest
+          imagePullPolicy: Always
+
+          command:
+            - celery
+            - -A
+            - app.workers.celery_app.celery
+            - beat
+            - --loglevel=info
+            - --pidfile=/tmp/celerybeat.pid
+            - --schedule=/tmp/celerybeat-schedule
+
+          envFrom:
+            - configMapRef:
+                name: eli-maor-config
+            - secretRef:
+                name: eli-maor-secrets
+
+          resources:
+            limits:
+              cpu: 250m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -f /tmp/celerybeat.pid && kill -0 $(cat /tmp/celerybeat.pid)
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -f /tmp/celerybeat.pid
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3

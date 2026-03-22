@@ -1,0 +1,132 @@
+# Kubernetes Deployment for Frontend
+# With rollback strategy
+#
+# Rollback:
+#   kubectl rollout undo deployment/eli-maor-frontend
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eli-maor-frontend
+  labels:
+    app: eli-maor
+    component: frontend
+  annotations:
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  replicas: 2
+
+  # ==================== Rollback Strategy ====================
+  revisionHistoryLimit: 10
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  minReadySeconds: 5
+  progressDeadlineSeconds: 300
+
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: frontend
+
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: frontend
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      # Pod anti-affinity for HA
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: eli-maor
+                    component: frontend
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: frontend
+          image: eli-maor-frontend:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 80
+              name: http
+
+          resources:
+            limits:
+              cpu: 250m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eli-maor-frontend
+  labels:
+    app: eli-maor
+    component: frontend
+spec:
+  selector:
+    app: eli-maor
+    component: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  type: ClusterIP
+
+---
+# PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eli-maor-frontend-pdb
+  labels:
+    app: eli-maor
+    component: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: frontend

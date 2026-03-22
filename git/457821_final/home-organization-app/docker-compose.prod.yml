@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  backend:
+    image: your-registry/eli-maor-backend:latest
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - DEBUG=False
+    networks:
+      - eli-maor-network
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+
+  worker:
+    image: your-registry/eli-maor-backend:latest
+    command: celery -A app.workers.celery_app.celery worker --loglevel=info --concurrency=4
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+    networks:
+      - eli-maor-network
+
+  beat:
+    image: your-registry/eli-maor-backend:latest
+    command: celery -A app.workers.celery_app.celery beat --loglevel=info
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+    networks:
+      - eli-maor-network
+
+networks:
+  eli-maor-network:
+    driver: overlay
+
+configs:
+  nginx_config:
+    external: true

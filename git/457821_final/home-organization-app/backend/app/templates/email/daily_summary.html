@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>סיכום יומי</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .header h1 {
+            color: #8B4513;
+            margin: 0;
+            font-size: 24px;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 20px;
+            background-color: #fafafa;
+            border-radius: 8px;
+            min-width: 120px;
+            margin: 10px;
+        }
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #8B4513;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 סיכום יומי - {{ app_name }}</h1>
+        </div>
+        
+        <div style="font-size: 18px; margin-bottom: 20px;">
+            שלום {{ user_name }},
+        </div>
+        
+        <p>הנה הסיכום היומי שלך:</p>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number">{{ summary.total_tasks or 0 }}</div>
+                <div class="stat-label">סה"כ משימות</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">{{ summary.completed_tasks or 0 }}</div>
+                <div class="stat-label">הושלמו</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">{{ summary.pending_tasks or 0 }}</div>
+                <div class="stat-label">ממתינות</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">{{ "%.0f"|format(summary.completion_rate or 0) }}%</div>
+                <div class="stat-label">אחוז סיום</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>סיכום זה נשלח אוטומטית מהמערכת</p>
+        </div>
+    </div>
+</body>
+</html>

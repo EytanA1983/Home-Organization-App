@@ -1,0 +1,221 @@
+# ==================== Docker Compose - Development ====================
+# Full development environment with hot reload
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml logs -f backend
+#   docker compose -f docker-compose.dev.yml down
+
+version: "3.9"
+
+services:
+  # ==================== Database ====================
+  db:
+    image: postgres:16-alpine
+    container_name: eli_maor_db_dev
+    hostname: db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eli_maor
+    volumes:
+      - pg_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eli_maor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - dev-network
+
+  # ==================== Redis ====================
+  redis:
+    image: redis:7-alpine
+    container_name: eli_maor_redis_dev
+    hostname: redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data_dev:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - dev-network
+
+  # ==================== Backend (Development) ====================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: eli_maor_backend_dev
+    hostname: backend
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/eli_maor
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - ENVIRONMENT=development
+      - DEBUG=true
+    volumes:
+      # Mount source code for hot reload
+      - ./backend/app:/app/app:delegated
+      - ./backend/alembic:/app/alembic:delegated
+      - ./backend/tests:/app/tests:delegated
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  # ==================== Celery Worker (Development) ====================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: eli_maor_worker_dev
+    hostname: worker
+    command: celery -A app.workers.celery_app.celery worker --loglevel=debug
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/eli_maor
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    volumes:
+      - ./backend/app:/app/app:delegated
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app.celery inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  # ==================== Celery Beat (Development) ====================
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: eli_maor_beat_dev
+    hostname: beat
+    command: >
+      celery -A app.workers.celery_app.celery beat
+      --loglevel=debug
+      --pidfile=/tmp/celerybeat.pid
+      --schedule=/tmp/celerybeat-schedule
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/eli_maor
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    volumes:
+      - ./backend/app:/app/app:delegated
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/celerybeat.pid && kill -0 $$(cat /tmp/celerybeat.pid) 2>/dev/null || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      worker:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  # ==================== Frontend (Development) ====================
+  # Note: For frontend development, run `npm run dev` locally
+  # This container is optional, for testing production build
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.dev
+  #   container_name: eli_maor_frontend_dev
+  #   volumes:
+  #     - ./frontend/src:/app/src:delegated
+  #     - ./frontend/public:/app/public:delegated
+  #   ports:
+  #     - "5178:5178"
+  #   environment:
+  #     - VITE_API_URL=http://localhost:8000
+  #   networks:
+  #     - dev-network
+
+  # ==================== Flower (Celery Monitoring) ====================
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: eli_maor_flower_dev
+    hostname: flower
+    command: celery -A app.workers.celery_app.celery flower --port=5555
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/eli_maor
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      worker:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  # ==================== MailHog (Email Testing) ====================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: eli_maor_mailhog_dev
+    hostname: mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+# ==================== Networks ====================
+networks:
+  dev-network:
+    driver: bridge
+
+# ==================== Volumes ====================
+volumes:
+  pg_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local

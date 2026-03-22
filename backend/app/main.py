@@ -162,7 +162,6 @@ if settings.RATE_LIMIT_ENABLED:
                 return _rate_limit_exceeded_handler(request, e)
 
         return await call_next(request)
-    return response
 
 # Include routers
 app.include_router(auth.router, prefix="/api", tags=["auth"])

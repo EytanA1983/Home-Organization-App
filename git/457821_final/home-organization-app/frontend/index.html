@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="he" dir="rtl" class="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+  <title>אלי מאור – סידור וארגון הבית</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#FAF3E0" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="אלי מאור" />
+  <meta name="application-name" content="אלי מאור" />
+  <meta name="msapplication-TileColor" content="#FAF3E0" />
+  <meta name="msapplication-config" content="/browserconfig.xml" />
+
+  <!-- PWA Manifest -->
+  <!-- href points to root of application (/manifest.webmanifest) -->
+  <!-- crossorigin="use-credentials" is only needed if manifest is on different domain -->
+  <!-- Temporarily disabled to fix "Manifest: Line: 1, column: 1, Syntax error" -->
+  <!-- <link rel="manifest" href="/manifest.webmanifest" /> -->
+
+  <!-- Favicon & Apple Touch Icons -->
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏡</text></svg>" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#FAF3E0" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!--
+      Inline script to prevent theme flash (FOUC)
+      This runs BEFORE React hydrates, applying the correct theme immediately
+    -->
+  <script>
+    (function () {
+      // Theme detection and application
+      const THEME_KEY = 'theme';
+      const root = document.documentElement;
+
+      // Get stored theme preference
+      let theme;
+      try {
+        theme = localStorage.getItem(THEME_KEY);
+      } catch (e) {
+        // localStorage not available
+      }
+
+      // Resolve theme
+      let resolvedTheme;
+      if (theme === 'dark') {
+        resolvedTheme = 'dark';
+      } else if (theme === 'light') {
+        resolvedTheme = 'light';
+      } else {
+        // System preference or no preference
+        resolvedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+      }
+
+      // Apply theme immediately
+      root.classList.remove('light', 'dark');
+      root.classList.add(resolvedTheme);
+      root.setAttribute('data-theme', resolvedTheme); // For CSS variable theming
+      root.style.colorScheme = resolvedTheme;
+
+      // Update theme-color meta tag
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (metaThemeColor) {
+        metaThemeColor.setAttribute(
+          'content',
+          resolvedTheme === 'dark' ? '#111827' : '#FAF3E0'
+        );
+      }
+    })();
+  </script>
+
+  <!-- Critical CSS to prevent flash -->
+  <style>
+    /* Prevent flash of unstyled content */
+    html {
+      background-color: #FAF3E0;
+    }
+
+    html.dark,
+    html[data-theme='dark'] {
+      background-color: #111827;
+    }
+
+    /* Hide content until app loads (optional, remove if causing issues) */
+    #root:empty::before {
+      content: '';
+      display: block;
+      height: 100vh;
+      background: inherit;
+    }
+
+    /* Theme transition styles (added after mount by React) */
+    html.theme-transitions,
+    html.theme-transitions *,
+    html.theme-transitions *::before,
+    html.theme-transitions *::after {
+      transition:
+        color 0.2s ease,
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease !important;
+    }
+  </style>
+</head>
+
+<body class="bg-cream dark:bg-dark-bg text-gray-900 dark:text-dark-text">
+  <noscript>
+    <div style="padding: 24px; font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto;">
+      <p dir="rtl" style="font-size: 1.1rem; margin-bottom: 0.5rem;"><strong>נדרש JavaScript</strong></p>
+      <p dir="rtl" style="color: #444;">הפעילי JavaScript בדפדפן כדי להשתמש באפליקציה.</p>
+      <p style="color: #444; margin-top: 1rem;"><strong>JavaScript is required</strong> to run this app.</p>
+    </div>
+  </noscript>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

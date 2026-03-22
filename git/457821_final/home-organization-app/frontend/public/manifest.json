@@ -1,0 +1,66 @@
+{
+  "name": "אלי מאור – סידור וארגון הבית",
+  "short_name": "אלי מאור",
+  "description": "אפליקציה לניהול ארגון הבית עם משימות וקטגוריות (תאימות לנתיבי חדרים ישנים)",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAF3E0",
+  "theme_color": "#FAF3E0",
+  "categories": ["productivity", "lifestyle", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "מסך הבית במחשב"
+    },
+    {
+      "src": "/screenshots/home-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "מסך הבית בנייד"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "הוסף משימה",
+      "short_name": "משימה חדשה",
+      "description": "צור משימה חדשה",
+      "url": "/tasks/new",
+      "icons": [
+        {
+          "src": "/icons/shortcut-add-task.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "הקטגוריות שלי",
+      "short_name": "קטגוריות",
+      "description": "צפה בכל הקטגוריות",
+      "url": "/categories",
+      "icons": [
+        {
+          "src": "/icons/shortcut-rooms.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

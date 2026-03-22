@@ -1,0 +1,54 @@
+FROM python:3.11-slim as base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+ENV POETRY_VERSION=1.7.1
+ENV POETRY_VENV=/opt/poetry-venv
+
+RUN python3 -m venv $POETRY_VENV \
+    && $POETRY_VENV/bin/pip install -U pip setuptools \
+    && $POETRY_VENV/bin/pip install poetry==${POETRY_VERSION} \
+    && ln -s ${POETRY_VENV}/bin/poetry /usr/local/bin/poetry
+
+WORKDIR /app
+
+# Copy Poetry files
+COPY pyproject.toml poetry.lock* ./
+
+# Configure Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1
+
+# Install dependencies
+RUN poetry install --no-interaction --no-ansi --no-root || \
+    poetry install --no-interaction --no-ansi --no-root --no-dev
+
+# Copy application code
+COPY . .
+
+# Install application
+RUN poetry install --no-interaction --no-ansi || \
+    poetry install --no-interaction --no-ansi --no-dev
+
+# Development
+FROM base as development
+ARG ENVIRONMENT=development
+ENV ENVIRONMENT=${ENVIRONMENT}
+
+RUN poetry install --no-interaction --no-ansi --with dev || true
+
+CMD ["poetry", "run", "celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
+
+# Production
+FROM base as production
+ARG ENVIRONMENT=production
+ENV ENVIRONMENT=${ENVIRONMENT}
+
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+CMD ["poetry", "run", "celery", "-A", "app.celery_app", "beat", "--loglevel=info"]

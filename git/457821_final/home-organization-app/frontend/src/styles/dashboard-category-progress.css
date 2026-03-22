@@ -1,0 +1,316 @@
+/* Unified dashboard “Your progress” — one calm card: inline summary + donut + legend */
+
+.dashboard-category-progress--unified {
+  padding: 22px 20px 20px;
+}
+
+.dashboard-category-progress__header {
+  margin-bottom: 12px;
+}
+
+.dashboard-category-progress__title {
+  margin: 0;
+  font-size: 1.28rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--wow-ink, #1e293b);
+}
+
+/* Compact single-line summary */
+.dashboard-category-progress__summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  font-size: 0.82rem;
+  color: var(--wow-muted, #64748b);
+}
+
+.dashboard-category-progress__summary-loading {
+  font-style: italic;
+  color: var(--wow-muted, #64748b);
+}
+
+.dashboard-category-progress__summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.dashboard-category-progress__summary-value {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--wow-ink, #1e293b);
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-category-progress__summary-label {
+  font-weight: 500;
+  color: var(--wow-muted, #64748b);
+}
+
+.dashboard-category-progress__summary-sep {
+  color: rgba(100, 116, 139, 0.45);
+  user-select: none;
+}
+
+.dashboard-category-progress__panel {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-category-progress__panel-message {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--wow-muted, #64748b);
+  text-align: center;
+}
+
+.dashboard-category-progress__panel-message--alert {
+  text-align: start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+}
+
+.dashboard-category-progress__skeleton {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 16px 0 8px;
+}
+
+.dashboard-category-progress__skeleton-ring {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: linear-gradient(
+    110deg,
+    rgba(99, 102, 241, 0.08) 0%,
+    rgba(99, 102, 241, 0.16) 40%,
+    rgba(99, 102, 241, 0.08) 80%
+  );
+  background-size: 200% 100%;
+  animation: dashboardProgressShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes dashboardProgressShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-category-progress__skeleton-ring {
+    animation: none;
+    background: rgba(99, 102, 241, 0.1);
+  }
+}
+
+.dashboard-category-progress__empty-unified {
+  text-align: center;
+  padding: 8px 8px 4px;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+.dashboard-category-progress__empty-visual {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.dashboard-category-progress__empty-svg {
+  width: 120px;
+  height: auto;
+  display: block;
+}
+
+.dashboard-category-progress__empty-title {
+  margin: 0 0 8px;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--wow-ink, #1e293b);
+}
+
+.dashboard-category-progress__empty-body {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  color: var(--wow-muted, #64748b);
+  line-height: 1.55;
+}
+
+.dashboard-category-progress__body {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-category-progress__low-hint {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--wow-muted, #64748b);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.dashboard-category-progress__chart-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) 1fr;
+  gap: 22px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .dashboard-category-progress__chart-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-category-progress__chart-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 160px;
+  min-height: 220px;
+}
+
+.dashboard-category-progress__svg--donut {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  display: block;
+  flex-shrink: 0;
+}
+
+.dashboard-category-progress__donut-center-pct {
+  fill: var(--wow-ink, #1e293b);
+  font-size: 22px;
+  font-weight: 800;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.dashboard-category-progress__donut-center-sub {
+  fill: var(--wow-muted, #64748b);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-category-progress__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-category-progress__legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.dashboard-category-progress__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.dashboard-category-progress__legend-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dashboard-category-progress__legend-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-category-progress__legend-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--wow-ink, #1e293b);
+  min-width: 0;
+}
+
+.dashboard-category-progress__legend-percent {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--wow-ink, #1e293b);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.dashboard-category-progress__legend-meta {
+  font-size: 0.8rem;
+  color: var(--wow-muted, #64748b);
+  line-height: 1.35;
+}
+
+/* Before/after block (separate section on Dashboard) */
+.dashboard-before-after-section__title {
+  margin: 0 0 6px;
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--wow-ink, #1e293b);
+}
+
+.dashboard-before-after-section__sub {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  color: var(--wow-muted, #64748b);
+  line-height: 1.45;
+}
+
+/* Placeholder donut — chart always visible before tasks exist */
+.dashboard-category-progress__placeholder-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-category-progress__placeholder-copy {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--wow-muted, #64748b);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.dashboard-category-progress__chart-row--placeholder {
+  align-items: start;
+}
+
+.dashboard-category-progress__placeholder-side {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding: 4px 0 0;
+}
+
+@media (min-width: 641px) {
+  .dashboard-category-progress__placeholder-side {
+    justify-items: start;
+    text-align: start;
+  }
+}

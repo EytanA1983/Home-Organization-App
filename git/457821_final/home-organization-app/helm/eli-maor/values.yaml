@@ -1,0 +1,332 @@
+# Default values for eli-maor Helm chart
+# This is a YAML-formatted file.
+
+# ==================== Global Settings ====================
+global:
+  # Environment: production, staging, development
+  environment: production
+
+  # Image pull secrets
+  imagePullSecrets: []
+
+  # Storage class for PVCs
+  storageClass: ""
+
+# ==================== Backend Configuration ====================
+backend:
+  enabled: true
+
+  # Replica count
+  replicaCount: 2
+
+  # Image configuration
+  image:
+    repository: eli-maor-backend
+    tag: "latest"
+    pullPolicy: Always
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8000
+
+  # Resource limits
+  resources:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  # ==================== Rollback Strategy ====================
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Revision history limit for rollbacks
+  revisionHistoryLimit: 10
+
+  # Minimum ready seconds
+  minReadySeconds: 10
+
+  # Progress deadline (seconds)
+  progressDeadlineSeconds: 600
+
+  # Probes
+  probes:
+    liveness:
+      enabled: true
+      path: /live
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 10
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /ready
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 30
+
+  # Pod disruption budget
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: backend
+            topologyKey: kubernetes.io/hostname
+
+# ==================== Frontend Configuration ====================
+frontend:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: eli-maor-frontend
+    tag: "latest"
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  revisionHistoryLimit: 10
+
+# ==================== Celery Worker Configuration ====================
+worker:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: eli-maor-backend
+    tag: "latest"
+    pullPolicy: Always
+
+  command:
+    - celery
+    - -A
+    - app.workers.celery_app.celery
+    - worker
+    - --loglevel=info
+    - --concurrency=2
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  revisionHistoryLimit: 10
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# ==================== Celery Beat Configuration ====================
+beat:
+  enabled: true
+
+  # Only ONE beat instance should run
+  replicaCount: 1
+
+  image:
+    repository: eli-maor-backend
+    tag: "latest"
+    pullPolicy: Always
+
+  command:
+    - celery
+    - -A
+    - app.workers.celery_app.celery
+    - beat
+    - --loglevel=info
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+
+  # Recreate strategy for beat (only one instance)
+  strategy:
+    type: Recreate
+
+  revisionHistoryLimit: 5
+
+# ==================== Ingress Configuration ====================
+ingress:
+  enabled: true
+  className: nginx
+
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+
+  hosts:
+    - host: eli-maor.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /ws
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+
+  tls: []
+  # - secretName: eli-maor-tls
+  #   hosts:
+  #     - eli-maor.example.com
+
+# ==================== PostgreSQL Configuration ====================
+postgresql:
+  enabled: true
+
+  auth:
+    username: eli_maor
+    password: ""  # Set via --set or secrets
+    database: eli_maor
+
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+# ==================== Redis Configuration ====================
+redis:
+  enabled: true
+
+  architecture: standalone
+
+  auth:
+    enabled: false
+
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi
+
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# ==================== Secrets Configuration ====================
+secrets:
+  # Create secrets from values (not recommended for production)
+  create: true
+
+  # External secret name (if create is false)
+  externalSecretName: ""
+
+  # Secret values (use external secrets manager in production)
+  values:
+    SECRET_KEY: ""  # Required - set via --set
+    GOOGLE_CLIENT_ID: ""
+    GOOGLE_CLIENT_SECRET: ""
+    VAPID_PUBLIC_KEY: ""
+    VAPID_PRIVATE_KEY: ""
+
+# ==================== ConfigMap Configuration ====================
+config:
+  # Environment variables
+  ENVIRONMENT: production
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  CACHE_ENABLED: "true"
+  CACHE_TTL_ROOMS: "120"
+  CACHE_TTL_TASKS: "60"
+
+# ==================== Service Account ====================
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ==================== Monitoring ====================
+monitoring:
+  enabled: true
+
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+
+  # PrometheusRule for alerts
+  prometheusRule:
+    enabled: true

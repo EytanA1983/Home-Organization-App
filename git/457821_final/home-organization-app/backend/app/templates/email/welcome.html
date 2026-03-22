@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ברוכים הבאים</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .header h1 {
+            color: #8B4513;
+            margin: 0;
+            font-size: 28px;
+        }
+        .content {
+            font-size: 16px;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #8B4513;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 ברוכים הבאים ל-{{ app_name }}!</h1>
+        </div>
+        
+        <div class="content">
+            <p>שלום {{ user_name }},</p>
+            
+            <p>אנחנו שמחים שהצטרפת אלינו!</p>
+            
+            <p>עם {{ app_name }} תוכל:</p>
+            <ul>
+                <li>📋 לנהל משימות לפי חדרים</li>
+                <li>📅 לקבל תזכורות אוטומטיות</li>
+                <li>👨‍👩‍👧‍👦 לשתף חדרים עם בני משפחה</li>
+                <li>📊 לעקוב אחר התקדמות</li>
+            </ul>
+            
+            <div style="text-align: center;">
+                <a href="#" class="button">התחל עכשיו</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>אם יש לך שאלות, אנחנו כאן לעזור!</p>
+        </div>
+    </div>
+</body>
+</html>

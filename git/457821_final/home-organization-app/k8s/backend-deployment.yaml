@@ -1,0 +1,177 @@
+# Kubernetes Deployment for Backend API
+# With rollback strategy and revision history
+#
+# Apply:
+#   kubectl apply -f k8s/backend-deployment.yaml
+#
+# Rollback:
+#   kubectl rollout undo deployment/eli-maor-backend
+#   kubectl rollout undo deployment/eli-maor-backend --to-revision=2
+#
+# History:
+#   kubectl rollout history deployment/eli-maor-backend
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eli-maor-backend
+  labels:
+    app: eli-maor
+    component: backend
+    version: v1
+  annotations:
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  replicas: 2
+
+  # ==================== Rollback Strategy ====================
+  # Keep 10 revisions for rollback
+  revisionHistoryLimit: 10
+
+  # Rolling update strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Max pods above desired during update
+      maxUnavailable: 0  # Always keep all replicas available
+
+  # Minimum time to consider pod ready
+  minReadySeconds: 10
+
+  # Deadline for rollout to make progress
+  progressDeadlineSeconds: 600
+
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: backend
+
+  template:
+    metadata:
+      labels:
+        app: eli-maor
+        component: backend
+        version: v1
+      annotations:
+        # Force rolling update when config changes
+        checksum/config: "{{ include (print $.Template.BasePath \"/configmap.yaml\") . | sha256sum }}"
+    spec:
+      # Graceful termination
+      terminationGracePeriodSeconds: 60
+
+      # Pod anti-affinity for HA
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: eli-maor
+                    component: backend
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: backend
+          image: eli-maor-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+
+          # Environment variables
+          envFrom:
+            - configMapRef:
+                name: eli-maor-config
+            - secretRef:
+                name: eli-maor-secrets
+
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          # Resource limits
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: "250m"
+              memory: 256Mi
+
+          # ==================== Probes ====================
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+
+          # Lifecycle hooks
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eli-maor-backend
+  labels:
+    app: eli-maor
+    component: backend
+spec:
+  selector:
+    app: eli-maor
+    component: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP
+
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eli-maor-backend-pdb
+  labels:
+    app: eli-maor
+    component: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: eli-maor
+      component: backend

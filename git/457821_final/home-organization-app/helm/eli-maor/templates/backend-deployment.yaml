@@ -1,0 +1,135 @@
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eli-maor.fullname" . }}-backend
+  labels:
+    {{- include "eli-maor.backend.labels" . | nindent 4 }}
+  annotations:
+    # Record deployment cause for rollback history
+    kubernetes.io/change-cause: "Helm release {{ .Release.Revision }}"
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+
+  # ==================== Rollback Configuration ====================
+  revisionHistoryLimit: {{ .Values.backend.revisionHistoryLimit | default 10 }}
+
+  strategy:
+    {{- toYaml .Values.backend.strategy | nindent 4 }}
+
+  minReadySeconds: {{ .Values.backend.minReadySeconds | default 10 }}
+  progressDeadlineSeconds: {{ .Values.backend.progressDeadlineSeconds | default 600 }}
+
+  selector:
+    matchLabels:
+      {{- include "eli-maor.backend.selectorLabels" . | nindent 6 }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "eli-maor.backend.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Force rolling update when config changes
+        checksum/config: {{ include "eli-maor.configChecksum" . }}
+        checksum/secret: {{ include "eli-maor.secretChecksum" . }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ include "eli-maor.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 60
+
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: {{ include "eli-maor.fullname" . }}-config
+            - secretRef:
+                {{- if .Values.secrets.create }}
+                name: {{ include "eli-maor.fullname" . }}-secrets
+                {{- else }}
+                name: {{ .Values.secrets.externalSecretName }}
+                {{- end }}
+
+          env:
+            - name: DATABASE_URL
+              value: {{ include "eli-maor.databaseUrl" . | quote }}
+            - name: REDIS_URL
+              value: {{ include "eli-maor.redisUrl" . | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+
+          {{- if .Values.backend.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.liveness.failureThreshold }}
+          {{- end }}
+
+          {{- if .Values.backend.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold }}
+          {{- end }}
+
+          {{- if .Values.backend.probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.startup.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.backend.probes.startup.failureThreshold }}
+          {{- end }}
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+{{- end }}

@@ -1,0 +1,159 @@
+# ==================== Docker Compose with HashiCorp Vault ====================
+# Production configuration using HashiCorp Vault for secrets
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.vault.yml up -d
+#
+# Prerequisites:
+#   1. Running Vault instance
+#   2. Secrets stored in Vault at path: secret/eli-maor/production
+#   3. AppRole or Token authentication configured
+
+version: "3.9"
+
+services:
+  # ==================== Vault Server (Development Only) ====================
+  # For production, use external Vault cluster
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: eli_maor_vault
+    hostname: vault
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-root-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://0.0.0.0:8200
+    volumes:
+      - vault_data:/vault/data
+      - ./vault/config:/vault/config
+      - ./vault/policies:/vault/policies
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: server -dev
+    networks:
+      - app-network
+
+  # ==================== Vault Init Job ====================
+  # Initializes Vault with secrets on first run
+  vault-init:
+    image: hashicorp/vault:1.15
+    container_name: eli_maor_vault_init
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: dev-root-token
+    volumes:
+      - ./vault/init:/init
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        # Wait for Vault
+        sleep 5
+
+        # Enable KV secrets engine v2
+        vault secrets enable -path=secret kv-v2 || true
+
+        # Create secrets
+        vault kv put secret/eli-maor/production \
+          SECRET_KEY="$${SECRET_KEY:-$(openssl rand -hex 32)}" \
+          DATABASE_URL="postgresql+psycopg2://postgres:postgres@db:5432/eli_maor" \
+          REDIS_URL="redis://redis:6379/0" \
+          GOOGLE_CLIENT_ID="$${GOOGLE_CLIENT_ID:-not-set}" \
+          GOOGLE_CLIENT_SECRET="$${GOOGLE_CLIENT_SECRET:-not-set}" \
+          VAPID_PUBLIC_KEY="$${VAPID_PUBLIC_KEY:-not-set}" \
+          VAPID_PRIVATE_KEY="$${VAPID_PRIVATE_KEY:-not-set}"
+
+        # Create AppRole for backend
+        vault auth enable approle || true
+
+        vault policy write eli-maor-backend - <<EOF
+        path "secret/data/eli-maor/*" {
+          capabilities = ["read", "list"]
+        }
+        EOF
+
+        vault write auth/approle/role/eli-maor-backend \
+          token_policies="eli-maor-backend" \
+          token_ttl=1h \
+          token_max_ttl=4h
+
+        # Output role-id and secret-id
+        ROLE_ID=$$(vault read -field=role_id auth/approle/role/eli-maor-backend/role-id)
+        SECRET_ID=$$(vault write -f -field=secret_id auth/approle/role/eli-maor-backend/secret-id)
+
+        echo "===================================="
+        echo "Vault initialized!"
+        echo "VAULT_ROLE_ID: $$ROLE_ID"
+        echo "VAULT_SECRET_ID: $$SECRET_ID"
+        echo "===================================="
+
+        # Save to file for other services
+        echo "$$ROLE_ID" > /init/role_id
+        echo "$$SECRET_ID" > /init/secret_id
+    networks:
+      - app-network
+
+  # ==================== Backend with Vault ====================
+  backend:
+    depends_on:
+      vault:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    environment:
+      # Vault configuration
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_SECRET_PATH=eli-maor/production
+      - VAULT_MOUNT_POINT=secret
+      # Use AppRole auth (read from init volume)
+      # - VAULT_ROLE_ID=${VAULT_ROLE_ID}
+      # - VAULT_SECRET_ID=${VAULT_SECRET_ID}
+      # Or use token for dev
+      - VAULT_TOKEN=dev-root-token
+      # Clear direct env vars (will be read from Vault)
+      - SECRET_KEY=
+      - GOOGLE_CLIENT_ID=
+      - GOOGLE_CLIENT_SECRET=
+      - VAPID_PUBLIC_KEY=
+      - VAPID_PRIVATE_KEY=
+    volumes:
+      - ./vault/init:/vault-init:ro
+
+  # ==================== Worker with Vault ====================
+  worker:
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_SECRET_PATH=eli-maor/production
+      - VAULT_TOKEN=dev-root-token
+
+  # ==================== Beat with Vault ====================
+  beat:
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_SECRET_PATH=eli-maor/production
+      - VAULT_TOKEN=dev-root-token
+
+# ==================== Volumes ====================
+volumes:
+  vault_data:
+    driver: local
+
+networks:
+  app-network:
+    external: true

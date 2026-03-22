@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.2.0",
+    "generators": {
+      "typescript-fetch": {
+        "generatorName": "typescript-fetch",
+        "inputSpec": "docs/openapi.json",
+        "output": "frontend/src/api/openapi-generated",
+        "additionalProperties": {
+          "npmName": "eli-maor-api-client",
+          "npmVersion": "1.0.0",
+          "supportsES6": true,
+          "typescriptThreePlus": true,
+          "withInterfaces": true,
+          "useSingleRequestParameter": true
+        },
+        "globalProperty": {
+          "skipFormModel": false
+        }
+      },
+      "typescript-axios": {
+        "generatorName": "typescript-axios",
+        "inputSpec": "docs/openapi.json",
+        "output": "frontend/src/api/axios-generated",
+        "additionalProperties": {
+          "npmName": "eli-maor-api-client-axios",
+          "npmVersion": "1.0.0",
+          "supportsES6": true,
+          "withInterfaces": true,
+          "withSeparateModelsAndApi": true,
+          "apiPackage": "api",
+          "modelPackage": "models"
+        }
+      }
+    }
+  }
+}
